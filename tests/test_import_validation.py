@@ -46,6 +46,52 @@ def test_footprint_validation_accepts_project_relative_model_reference(
     assert result.model_paths == ("${KIPRJMOD}/libs/lcsc_project.3dshapes/good.step",)
 
 
+def test_global_model_reference_must_be_absolute_and_within_model_root(tmp_path: Path) -> None:
+    model_root = tmp_path / "Haru.3dshapes"
+    model_root.mkdir()
+    footprint = tmp_path / "Haru.kicad_mod"
+    footprint.write_text(
+        f'(footprint "Haru" (model "{(model_root / "Haru.step").as_posix()}"))',
+        encoding="utf-8",
+    )
+
+    result = validate_footprint(footprint, model_root=model_root)
+
+    assert result.model_paths == ((model_root / "Haru.step").as_posix(),)
+    footprint.write_text(
+        f'(footprint "Haru" (model "{(tmp_path / "outside.step").as_posix()}"))',
+        encoding="utf-8",
+    )
+    with pytest.raises(ImportValidationError, match="outside"):
+        validate_footprint(footprint, model_root=model_root)
+
+
+def test_global_model_reference_rejects_relative_path(tmp_path: Path) -> None:
+    model_root = tmp_path / "Haru.3dshapes"
+    model_root.mkdir()
+    footprint = tmp_path / "Haru.kicad_mod"
+    footprint.write_text('(footprint "Haru" (model "Haru.step"))', encoding="utf-8")
+
+    with pytest.raises(ImportValidationError, match=r"Haru\.step"):
+        validate_footprint(footprint, model_root=model_root)
+
+
+def test_global_model_reference_rejects_temp_segment_within_model_root(
+    tmp_path: Path,
+) -> None:
+    model_root = tmp_path / "Haru.3dshapes"
+    model_root.mkdir()
+    model_path = model_root / "temp" / "Haru.step"
+    footprint = tmp_path / "Haru.kicad_mod"
+    footprint.write_text(
+        f'(footprint "Haru" (model "{model_path.as_posix()}"))',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ImportValidationError, match="temp"):
+        validate_footprint(footprint, model_root=model_root)
+
+
 def test_footprint_validation_accepts_easyeda_legacy_module(tmp_path: Path) -> None:
     footprint = tmp_path / "C0805.kicad_mod"
     footprint.write_text(

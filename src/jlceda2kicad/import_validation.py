@@ -89,7 +89,20 @@ def _validate_model_path(model_path: str) -> None:
         raise ImportValidationError(f"模型引用不是工程相对受管路径：{model_path}")
 
 
-def validate_footprint(path: Path) -> ArtifactValidation:
+def _validate_global_model_path(model_path: str, model_root: Path) -> None:
+    path = Path(model_path)
+    if not path.is_absolute():
+        raise ImportValidationError(f"global model reference is not absolute: {model_path}")
+    try:
+        relative = path.resolve().relative_to(model_root.resolve())
+    except ValueError as error:
+        message = f"global model reference is outside model root: {model_path}"
+        raise ImportValidationError(message) from error
+    if any(part.casefold() == "temp" for part in relative.parts):
+        raise ImportValidationError(f"global model reference contains a temp path: {model_path}")
+
+
+def validate_footprint(path: Path, *, model_root: Path | None = None) -> ArtifactValidation:
     root = _parse_file(path, "footprint", alternative_heads=("module",))
     nodes = _walk(root)
     pad_numbers = {
@@ -101,5 +114,8 @@ def validate_footprint(path: Path) -> ArtifactValidation:
         node.atoms[1].value for node in nodes if node.head == "model" and len(node.atoms) >= 2
     )
     for model_path in model_paths:
-        _validate_model_path(model_path)
+        if model_root is None:
+            _validate_model_path(model_path)
+        else:
+            _validate_global_model_path(model_path, model_root)
     return ArtifactValidation(frozenset(pad_numbers), model_paths)
