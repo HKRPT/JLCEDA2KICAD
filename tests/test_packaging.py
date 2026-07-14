@@ -1,0 +1,47 @@
+import hashlib
+import zipfile
+from pathlib import Path
+
+from kipy.packaging.validate import validate
+
+from scripts.build_package import build_package
+
+
+def test_build_package_has_pcm_root_and_direct_ipc_plugin_layout(tmp_path: Path) -> None:
+    result = build_package(tmp_path)
+
+    assert result.archive.name == "JLCEDA2KICAD-0.1.0.zip"
+    with zipfile.ZipFile(result.archive) as archive:
+        names = set(archive.namelist())
+    assert "metadata.json" in names
+    assert "resources/icon_128.png" in names
+    assert "plugins/plugin.json" in names
+    assert "plugins/plugin_entry.py" in names
+    assert "plugins/requirements.txt" in names
+    assert "plugins/jlceda2kicad/main.py" in names
+    assert "plugins/resources/icon_24.png" in names
+    assert not any(
+        forbidden in name
+        for name in names
+        for forbidden in (".git", ".venv", "__pycache__", "settings.json", ".log")
+    )
+
+
+def test_build_package_writes_matching_sha256_and_sorted_manifest(tmp_path: Path) -> None:
+    result = build_package(tmp_path)
+    digest = hashlib.sha256(result.archive.read_bytes()).hexdigest()
+
+    assert result.sha256_file.read_text(encoding="ascii").strip() == (
+        f"{digest}  {result.archive.name}"
+    )
+    manifest = result.manifest_file.read_text(encoding="utf-8").splitlines()
+    assert manifest == sorted(manifest)
+    assert "plugins/plugin.json" in manifest
+
+
+def test_built_package_passes_official_kipy_validator(tmp_path: Path) -> None:
+    result = build_package(tmp_path)
+    report = validate(result.archive)
+
+    errors = [message.message for message in report.messages if message.level == "error"]
+    assert errors == []
