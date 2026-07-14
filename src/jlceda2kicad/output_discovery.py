@@ -1,7 +1,7 @@
 """Discover converter artifacts without assuming component names."""
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from .models import ArtifactSet
 
@@ -88,4 +88,3 @@ def choose_best_candidate(
     if best_score > 0 and len(best) == 1:
         return best[0]
     raise AmbiguousArtifactError("存在多个同等候选文件，请手动选择。")
-

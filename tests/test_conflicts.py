@@ -9,7 +9,6 @@ from jlceda2kicad.conflicts import (
 )
 from jlceda2kicad.models import ConflictPolicy
 
-
 EXISTING = """(kicad_symbol_lib
   (version 20231120)
   (symbol "OldName" (property "LCSC Part" "C100"))
@@ -31,9 +30,7 @@ def test_symbol_conflict_cancel_reports_lcsc_collision() -> None:
 
 
 def test_symbol_conflict_skip_leaves_library_byte_for_byte() -> None:
-    result = merge_symbol_library(
-        EXISTING, _incoming(), "C100", ConflictPolicy.SKIP_EXISTING
-    )
+    result = merge_symbol_library(EXISTING, _incoming(), "C100", ConflictPolicy.SKIP_EXISTING)
 
     assert result.text == EXISTING
     assert result.skipped is True
@@ -41,9 +38,7 @@ def test_symbol_conflict_skip_leaves_library_byte_for_byte() -> None:
 
 
 def test_symbol_conflict_overwrite_replaces_only_colliding_node() -> None:
-    result = merge_symbol_library(
-        EXISTING, _incoming(), "C100", ConflictPolicy.OVERWRITE_COMPONENT
-    )
+    result = merge_symbol_library(EXISTING, _incoming(), "C100", ConflictPolicy.OVERWRITE_COMPONENT)
 
     assert 'symbol "OldName"' not in result.text
     assert 'symbol "NewName"' in result.text
@@ -53,9 +48,7 @@ def test_symbol_conflict_overwrite_replaces_only_colliding_node() -> None:
 
 def test_symbol_name_collision_is_detected_even_with_different_lcsc_id() -> None:
     with pytest.raises(ComponentConflictError, match="SameName"):
-        merge_symbol_library(
-            EXISTING, _incoming("SameName", "C300"), "C300", ConflictPolicy.CANCEL
-        )
+        merge_symbol_library(EXISTING, _incoming("SameName", "C300"), "C300", ConflictPolicy.CANCEL)
 
 
 def test_symbol_merge_creates_a_library_when_none_exists() -> None:
@@ -85,6 +78,5 @@ def test_file_cancel_policy_refuses_existing_target(tmp_path: Path) -> None:
     target = tmp_path / "part.wrl"
     target.write_text("old", encoding="utf-8")
 
-    with pytest.raises(ComponentConflictError, match="part.wrl"):
+    with pytest.raises(ComponentConflictError, match=r"part\.wrl"):
         resolve_file_conflicts({tmp_path / "staged.wrl": target}, ConflictPolicy.CANCEL)
-

@@ -20,11 +20,11 @@ class LibraryRegistrationResult:
 _TABLES = {
     "sym-lib-table": (
         "sym_lib_table",
-        '${KIPRJMOD}/libs/lcsc_project.kicad_sym',
+        "${KIPRJMOD}/libs/lcsc_project.kicad_sym",
     ),
     "fp-lib-table": (
         "fp_lib_table",
-        '${KIPRJMOD}/libs/lcsc_project.pretty',
+        "${KIPRJMOD}/libs/lcsc_project.pretty",
     ),
 }
 
@@ -81,9 +81,10 @@ def _write_atomic(path: Path, text: str) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def register_project_libraries(project_root: Path) -> LibraryRegistrationResult:
-    """Register project-local libraries after validating every existing table."""
-
+def build_project_library_table_updates(
+    project_root: Path,
+) -> tuple[dict[Path, str], LibraryRegistrationResult]:
+    """Build table contents without touching disk, after validating both tables."""
     loaded: dict[str, tuple[str | None, ListExpr | None]] = {}
     for filename, (root_name, _) in _TABLES.items():
         loaded[filename] = _load_table(project_root / filename, root_name)
@@ -97,11 +98,18 @@ def register_project_libraries(project_root: Path) -> LibraryRegistrationResult:
         if not already_registered:
             updates[project_root / filename] = _updated_table(text, root, root_name, uri)
 
-    project_root.mkdir(parents=True, exist_ok=True)
-    for path, text in updates.items():
-        _write_atomic(path, text)
-
-    return LibraryRegistrationResult(
+    result = LibraryRegistrationResult(
         symbol_registered=changed["sym-lib-table"],
         footprint_registered=changed["fp-lib-table"],
     )
+    return updates, result
+
+
+def register_project_libraries(project_root: Path) -> LibraryRegistrationResult:
+    """Register project-local libraries after validating every existing table."""
+
+    updates, result = build_project_library_table_updates(project_root)
+    project_root.mkdir(parents=True, exist_ok=True)
+    for path, text in updates.items():
+        _write_atomic(path, text)
+    return result

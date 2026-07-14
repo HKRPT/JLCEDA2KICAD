@@ -47,4 +47,3 @@ def test_choose_best_candidate_rejects_unresolvable_ambiguity(tmp_path: Path) ->
 
     with pytest.raises(AmbiguousArtifactError):
         choose_best_candidate(candidates, "C2040", "symbol")
-

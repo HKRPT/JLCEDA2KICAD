@@ -2,7 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from jlceda2kicad.library_tables import LibraryTableError, register_project_libraries
+from jlceda2kicad.library_tables import (
+    LibraryTableError,
+    build_project_library_table_updates,
+    register_project_libraries,
+)
 
 
 def test_register_project_libraries_creates_both_tables(tmp_path: Path) -> None:
@@ -12,9 +16,9 @@ def test_register_project_libraries_creates_both_tables(tmp_path: Path) -> None:
     footprint = (tmp_path / "fp-lib-table").read_text(encoding="utf-8")
     assert result.symbol_registered and result.footprint_registered
     assert '(name "LCSC_Project")' in symbol
-    assert '${KIPRJMOD}/libs/lcsc_project.kicad_sym' in symbol
+    assert "${KIPRJMOD}/libs/lcsc_project.kicad_sym" in symbol
     assert '(name "LCSC_Project")' in footprint
-    assert '${KIPRJMOD}/libs/lcsc_project.pretty' in footprint
+    assert "${KIPRJMOD}/libs/lcsc_project.pretty" in footprint
 
 
 def test_register_project_libraries_is_idempotent_and_preserves_existing_text(
@@ -23,7 +27,8 @@ def test_register_project_libraries_is_idempotent_and_preserves_existing_text(
     symbol_table = tmp_path / "sym-lib-table"
     original = """(sym_lib_table
   (version 7)
-  (lib (name "Existing") (type "KiCad") (uri "${KIPRJMOD}/existing.kicad_sym") (options "") (descr "user (text)"))
+  (lib (name "Existing") (type "KiCad")
+    (uri "${KIPRJMOD}/existing.kicad_sym") (options "") (descr "user (text)"))
 )\n"""
     symbol_table.write_text(original, encoding="utf-8")
 
@@ -55,3 +60,12 @@ def test_register_project_libraries_leaves_no_temporary_files(tmp_path: Path) ->
     register_project_libraries(tmp_path)
 
     assert not tuple(tmp_path.glob("*.tmp"))
+
+
+def test_build_table_updates_is_pure_until_transaction_commits(tmp_path: Path) -> None:
+    updates, result = build_project_library_table_updates(tmp_path)
+
+    assert {path.name for path in updates} == {"sym-lib-table", "fp-lib-table"}
+    assert result.symbol_registered and result.footprint_registered
+    assert not (tmp_path / "sym-lib-table").exists()
+    assert '(name "LCSC_Project")' in updates[tmp_path / "sym-lib-table"]

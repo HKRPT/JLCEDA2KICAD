@@ -96,9 +96,7 @@ def validate_footprint(path: Path) -> ArtifactValidation:
         if node.head == "pad" and len(node.atoms) >= 2 and node.atoms[1].value
     }
     model_paths = tuple(
-        node.atoms[1].value
-        for node in nodes
-        if node.head == "model" and len(node.atoms) >= 2
+        node.atoms[1].value for node in nodes if node.head == "model" and len(node.atoms) >= 2
     )
     for model_path in model_paths:
         _validate_model_path(model_path)

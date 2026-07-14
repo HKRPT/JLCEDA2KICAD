@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .models import ConflictPolicy
-from .sexpr import Atom, ListExpr, parse_one, remove_spans
+from .sexpr import ListExpr, parse_one, remove_spans
 
 
 class ComponentConflictError(RuntimeError):
@@ -29,9 +29,8 @@ def _symbol_name(symbol: ListExpr) -> str:
 def _property_value(symbol: ListExpr, property_name: str) -> str | None:
     for child in symbol.children:
         atoms = child.atoms
-        if child.head == "property" and len(atoms) >= 3:
-            if atoms[1].value == property_name:
-                return atoms[2].value
+        if child.head == "property" and len(atoms) >= 3 and atoms[1].value == property_name:
+            return atoms[2].value
     return None
 
 
@@ -64,8 +63,7 @@ def merge_symbol_library(
     collisions = tuple(
         symbol
         for symbol in _top_level_symbols(existing_root)
-        if _symbol_name(symbol) in incoming_names
-        or _property_value(symbol, "LCSC Part") == lcsc_id
+        if _symbol_name(symbol) in incoming_names or _property_value(symbol, "LCSC Part") == lcsc_id
     )
     if collisions and policy is ConflictPolicy.CANCEL:
         details = ", ".join(_symbol_name(symbol) for symbol in collisions)
@@ -77,9 +75,7 @@ def merge_symbol_library(
     overwritten: tuple[str, ...] = ()
     if collisions:
         overwritten = tuple(_symbol_name(symbol) for symbol in collisions)
-        base = remove_spans(
-            base, tuple((symbol.start, symbol.end) for symbol in collisions)
-        )
+        base = remove_spans(base, tuple((symbol.start, symbol.end) for symbol in collisions))
 
     symbol_source = "\n".join(
         incoming_text[symbol.start : symbol.end] for symbol in incoming_symbols
@@ -90,6 +86,23 @@ def merge_symbol_library(
     prefix = base[:insert_at].rstrip()
     merged = f"{prefix}\n  {symbol_source}\n{base[insert_at:]}"
     return SymbolMergeResult(merged, overwritten_names=overwritten)
+
+
+def extract_symbol_component_library(text: str, lcsc_id: str) -> str:
+    """Create a single-component library from a generated/shadow library."""
+
+    root = parse_one(text)
+    if root.head != "kicad_symbol_lib":
+        raise ValueError("转换输出不是 KiCad 符号库。")
+    matches = tuple(
+        symbol
+        for symbol in _top_level_symbols(root)
+        if _property_value(symbol, "LCSC Part") == lcsc_id
+    )
+    if len(matches) != 1:
+        raise ValueError(f"符号库中应有且仅有一个 {lcsc_id}，实际为 {len(matches)} 个。")
+    symbol_text = text[matches[0].start : matches[0].end]
+    return f"(kicad_symbol_lib\n  (version 20231120)\n  {symbol_text}\n)\n"
 
 
 def resolve_file_conflicts(
@@ -103,10 +116,7 @@ def resolve_file_conflicts(
         raise ComponentConflictError(f"文件冲突：{names}")
     if policy is ConflictPolicy.SKIP_EXISTING:
         selected = {
-            staged: target
-            for staged, target in staged_to_target.items()
-            if not target.exists()
+            staged: target for staged, target in staged_to_target.items() if not target.exists()
         }
         return selected, existing
     return dict(staged_to_target), ()
-

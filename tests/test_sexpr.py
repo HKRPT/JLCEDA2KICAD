@@ -53,4 +53,3 @@ def test_rewrite_footprint_models_selects_step_or_removes_models() -> None:
     assert "demo.step" in step and "demo.wrl" not in step
     assert "(model" not in none
     assert "(fp_line" in none
-

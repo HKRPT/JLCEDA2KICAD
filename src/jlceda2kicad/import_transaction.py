@@ -94,4 +94,8 @@ def prepare_shadow_project(project_root: Path, shadow_root: Path) -> Path:
         source = source_libs / directory_name
         if source.is_dir():
             shutil.copytree(source, target_libs / directory_name, dirs_exist_ok=True)
+    for table_name in ("sym-lib-table", "fp-lib-table"):
+        source = project_root / table_name
+        if source.is_file():
+            shutil.copy2(source, shadow_root / table_name)
     return target_libs / "lcsc_project"

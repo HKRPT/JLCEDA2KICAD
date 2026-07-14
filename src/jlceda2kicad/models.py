@@ -93,5 +93,6 @@ class ImportReport:
     success: bool
     committed_paths: tuple[Path, ...] = ()
     warnings: tuple[str, ...] = ()
+    library_registration: tuple[str, ...] = ()
     backup_dir: Path | None = None
     rollback_result: tuple[str, ...] = ()

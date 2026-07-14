@@ -72,7 +72,9 @@ class _Parser:
                     index += 1
             raise SExprError("字符串没有结束引号。")
 
-        while index < self.length and not self.text[index].isspace() and self.text[index] not in "()":
+        while (
+            index < self.length and not self.text[index].isspace() and self.text[index] not in "()"
+        ):
             index += 1
         if index == start:
             raise SExprError(f"无法解析位置 {index}。")
@@ -90,6 +92,7 @@ class _Parser:
                 raise SExprError("S 表达式括号不完整。")
             if self.text[index] == ")":
                 return ListExpr(tuple(items), start, index + 1), index + 1
+            item: Node
             if self.text[index] == "(":
                 item, index = self.parse_list(index)
             else:
@@ -111,9 +114,13 @@ def parse_one(text: str) -> ListExpr:
 def _has_property(expression: ListExpr, name: str, value: str) -> bool:
     for child in expression.children:
         atoms = child.atoms
-        if child.head == "property" and len(atoms) >= 3:
-            if atoms[1].value == name and atoms[2].value == value:
-                return True
+        if (
+            child.head == "property"
+            and len(atoms) >= 3
+            and atoms[1].value == name
+            and atoms[2].value == value
+        ):
+            return True
     return False
 
 
@@ -157,4 +164,3 @@ def rewrite_footprint_models(text: str, mode: str) -> str:
     for start, end, replacement in sorted(replacements, reverse=True):
         updated = updated[:start] + replacement + updated[end:]
     return updated
-

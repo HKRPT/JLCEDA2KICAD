@@ -11,7 +11,7 @@ from jlceda2kicad.import_validation import (
 
 def test_symbol_validation_rejects_unbalanced_library(tmp_path: Path) -> None:
     symbol = tmp_path / "broken.kicad_sym"
-    symbol.write_text("(kicad_symbol_lib (symbol \"broken\")", encoding="utf-8")
+    symbol.write_text('(kicad_symbol_lib (symbol "broken")', encoding="utf-8")
 
     with pytest.raises(ImportValidationError, match="括号"):
         validate_symbol_library(symbol)
@@ -26,7 +26,7 @@ def test_footprint_validation_rejects_absolute_or_temporary_model_paths(
         encoding="utf-8",
     )
 
-    with pytest.raises(ImportValidationError, match="绝对路径|临时路径"):
+    with pytest.raises(ImportValidationError, match=r"绝对路径|临时路径"):
         validate_footprint(footprint)
 
 
@@ -43,9 +43,7 @@ def test_footprint_validation_accepts_project_relative_model_reference(
 
     result = validate_footprint(footprint)
 
-    assert result.model_paths == (
-        "${KIPRJMOD}/libs/lcsc_project.3dshapes/good.step",
-    )
+    assert result.model_paths == ("${KIPRJMOD}/libs/lcsc_project.3dshapes/good.step",)
 
 
 def test_pin_pad_number_difference_is_warning_not_failure(tmp_path: Path) -> None:

@@ -82,6 +82,7 @@ def test_prepare_shadow_project_copies_only_managed_library_tree(tmp_path: Path)
     (libs / "lcsc_project.3dshapes").mkdir()
     (libs / "lcsc_project.kicad_sym").write_text("symbols", encoding="utf-8")
     (libs / "lcsc_project.pretty" / "demo.kicad_mod").write_text("footprint", encoding="utf-8")
+    (project / "sym-lib-table").write_text("(sym_lib_table (version 7))", encoding="utf-8")
     (libs / "unrelated.txt").write_text("private", encoding="utf-8")
     shadow = tmp_path / "shadow"
 
@@ -90,4 +91,5 @@ def test_prepare_shadow_project_copies_only_managed_library_tree(tmp_path: Path)
     assert output_base == shadow / "libs" / "lcsc_project"
     assert (shadow / "libs" / "lcsc_project.kicad_sym").is_file()
     assert (shadow / "libs" / "lcsc_project.pretty" / "demo.kicad_mod").is_file()
+    assert (shadow / "sym-lib-table").is_file()
     assert not (shadow / "libs" / "unrelated.txt").exists()
