@@ -5,9 +5,7 @@ import re
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-_PROXY_CREDENTIALS = re.compile(
-    r"(?i)(https?_proxy\s*=\s*)(https?://)([^/@\s:]+)(?::[^@\s]*)?@"
-)
+_PROXY_CREDENTIALS = re.compile(r"(?i)(https?_proxy\s*=\s*)(https?://)([^/@\s:]+)(?::[^@\s]*)?@")
 _API_TOKEN = re.compile(r"(?i)(KICAD_API_TOKEN\s*=\s*)[^\s]+")
 _URL_CREDENTIALS = re.compile(r"(?i)(https?://)([^/@\s:]+)(?::[^@\s]*)?@")
 
@@ -34,4 +32,3 @@ def configure_logging(log_dir: Path) -> Path:
     logger.setLevel(logging.INFO)
     logger.propagate = False
     return path
-

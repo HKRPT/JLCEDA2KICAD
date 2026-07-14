@@ -71,4 +71,3 @@ def test_history_corruption_is_backed_up(tmp_path: Path) -> None:
 
     assert HistoryStore(path).load() == []
     assert len(tuple(tmp_path.glob("history.json.broken-*"))) == 1
-

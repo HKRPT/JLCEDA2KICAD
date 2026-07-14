@@ -50,4 +50,3 @@ class SettingsStore:
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
             preserve_broken(self.path)
             return AppSettings()
-

@@ -18,7 +18,9 @@ def test_backup_manifest_and_rollback_restore_existing_and_remove_new_files(
     manifest = manager.create((existing, new_file))
 
     assert manifest.manifest_path.is_file()
-    existing_record = next(record for record in manifest.records if record.relative_path.endswith("kicad_sym"))
+    existing_record = next(
+        record for record in manifest.records if record.relative_path.endswith("kicad_sym")
+    )
     assert existing_record.sha256 == hashlib.sha256(b"original").hexdigest()
     assert not next(record for record in manifest.records if not record.existed).sha256
 
@@ -51,4 +53,3 @@ def test_backup_prune_keeps_newest_directories(tmp_path: Path) -> None:
         "20260102T000000000000Z",
         "20260103T000000000000Z",
     ]
-

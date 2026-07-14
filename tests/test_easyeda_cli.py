@@ -61,4 +61,3 @@ def test_build_command_requires_at_least_one_mode(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="mode"):
         build_command(request)
-

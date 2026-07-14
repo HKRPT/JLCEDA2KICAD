@@ -26,4 +26,3 @@ def preserve_broken(path: Path) -> Path:
     destination = path.with_name(f"{path.name}.broken-{stamp}")
     path.replace(destination)
     return destination
-

@@ -16,4 +16,3 @@ def normalize_lcsc_id(raw: str) -> str:
     if not _LCSC_ID.fullmatch(normalized):
         raise LcscIdError("请输入一个有效的立创商城 C 编号，例如 C2040。")
     return normalized
-

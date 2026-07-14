@@ -23,4 +23,3 @@ def test_normalize_lcsc_id_accepts_one_identifier(raw: str, expected: str) -> No
 def test_normalize_lcsc_id_rejects_unsafe_or_invalid_input(raw: str) -> None:
     with pytest.raises(LcscIdError, match="C"):
         normalize_lcsc_id(raw)
-

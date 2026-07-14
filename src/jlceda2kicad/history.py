@@ -59,4 +59,3 @@ class HistoryStore:
             data["timestamp"] = timestamp.isoformat()
             serialized.append(data)
         write_json_atomic(self.path, serialized)
-

@@ -49,4 +49,3 @@ def build_command(
         arguments=tuple(arguments),
         working_dir=request.working_dir,
     )
-
