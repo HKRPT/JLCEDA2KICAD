@@ -5,7 +5,8 @@
 JLCEDA2KICAD is an unofficial, Windows-first KiCad IPC plugin for previewing and
 importing one LCSC component at a time. It launches `easyeda2kicad` with
 `QProcess`, validates the formal conversion in a shadow project, and promotes
-selected files into project-local libraries with backups and rollback.
+selected files into project-local or KiCad global personal libraries with
+backups and rollback.
 
 Version 0.1.0 targets KiCad 9.0.1+ and KiCad 10 on Windows. Core logic is tested
 on Windows and Ubuntu, but the first PCM release declares Windows only.
@@ -19,6 +20,8 @@ on Windows and Ubuntu, but the first PCM release declares Windows only.
 - Previews symbol SVG, supported KiCad footprint primitives, and WRL geometry.
 - Converts symbol, footprint, and 3D artifacts separately in a shadow project.
 - Registers `LCSC_Project` in project-level symbol and footprint library tables.
+- Imports into independently selected existing or pending KiCad global symbol
+  and footprint libraries with independently editable component names.
 - Backs up every affected file with SHA-256 metadata, atomically replaces files,
   rolls back failures, and retains the latest five backups by default.
 - Supports cancel, skip-existing, and component-only overwrite policies.
@@ -67,6 +70,35 @@ cache, history, and logs.
 5. Select **Import into Current Project** and choose a conflict policy if prompted.
 6. Review the report and the `libs` directory. Backups are stored under
    `.jlceda2kicad_backup` in that project.
+
+## Global personal libraries
+
+Project mode keeps using `libs/lcsc_project.kicad_sym`,
+`libs/lcsc_project.pretty`, and `libs/lcsc_project.3dshapes` in the selected
+project. To import into libraries registered for the current KiCad user instead:
+
+1. Query and preview one LCSC component.
+2. Select **KiCad global personal library** as the import target.
+3. Select the symbol and footprint libraries independently. Either selector can
+   use an existing writable library or create a pending library that is
+   registered only when the import commits.
+4. Edit the symbol and footprint names independently.
+5. Verify the displayed sibling `.3dshapes` directory and the final
+   `<footprint-library>:<footprint>` association. The association is applied
+   when both the symbol and footprint are imported.
+6. Import and inspect the result dialog for the exact symbol, footprint, model,
+   and backup paths. If a newly registered library is not immediately visible,
+   restart only the relevant KiCad Symbol or Footprint Editor; editor-side
+   library-table caching can outlive an importer refresh.
+
+Global imports store backups under the application-local
+`backups/global/<timestamp-UUID>` directory (normally
+`%LOCALAPPDATA%\HKRPT\JLCEDA2KICAD\backups\global` on Windows). Its manifest
+records every absolute target path, original size, and SHA-256 value. Footprints
+in the current machine's selected global library receive normalized absolute
+STEP/WRL references into the displayed sibling `.3dshapes` directory, so review
+those references before moving a library to another machine. Automated tests
+use temporary stand-in libraries and never write the real `Harulib` library.
 
 Do initial validation in an isolated project. This tool downloads and converts
 third-party component data; always verify symbol pins, footprint pads, dimensions,

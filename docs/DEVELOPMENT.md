@@ -24,6 +24,36 @@ Formal conversion invariants:
 - run symbol, footprint, and 3D modes separately;
 - validate and stage all project files before one atomic transaction.
 
+## Core test routing and global backups
+
+Keep filesystem and rewrite behavior in pure core modules, with Qt limited to
+collecting an `ImportTarget` and presenting the resulting `ImportReport`:
+
+- `tests/test_global_libraries.py` covers global-table discovery and pending
+  registration planning.
+- `tests/test_artifact_rewrite.py` and `tests/test_import_validation.py` cover
+  independent names, symbol-to-footprint association, and normalized absolute
+  model references.
+- `tests/test_absolute_backup.py` and `tests/test_import_transaction.py` cover
+  multi-root backup, atomic commit, rollback, and cleanup.
+- `tests/test_global_import_service.py` routes those pure services end to end.
+  Widget/window routing belongs in `tests/test_library_target_widget.py` and
+  `tests/test_main_window.py` and runs with `QT_QPA_PLATFORM=offscreen`.
+
+Tests use `tmp_path` for every selected library and table. Fixture nicknames such
+as `Harulib` are only labels for temporary paths; automated tests must never read
+or write the user's real `Harulib.kicad_sym`.
+
+Project imports keep their snapshots under
+`<project>/.jlceda2kicad_backup/<timestamp>`. A global import can span the user
+symbol library, footprint directory, sibling `.3dshapes` directory, and KiCad
+global tables, so it uses an absolute-path backup rooted at
+`<AppLocalDataLocation>/backups/global/<timestamp-UUID>`. `manifest.json` stores
+`target_path`, `backup_name`, `existed`, `size`, and `sha256` for each target;
+payloads for existing files live under `files/`. The default retention is the
+latest five completed backup directories. All mappings are validated and staged
+before one multi-root transaction, and any commit failure rolls every root back.
+
 To run the optional network probe:
 
 ```powershell

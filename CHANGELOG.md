@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Global personal-library target selection with independent symbol and footprint
+  libraries and names, automatic `<library>:<footprint>` association, normalized
+  absolute 3D model references, and multi-root backup rollback.
+
 ## [0.1.0] - 2026-07-14
 
 ### Added

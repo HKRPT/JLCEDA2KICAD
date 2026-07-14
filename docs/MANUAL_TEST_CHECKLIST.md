@@ -26,5 +26,16 @@ Use disposable projects only. Run the full list separately in KiCad 9.0.6 and
 - [ ] Run `scripts/uninstall_dev.ps1`; confirm other plugins remain untouched.
 - [ ] Optionally run uninstall with `-PurgeAppData` and confirm only this app's data is removed.
 
+## Global personal library smoke test
+
+- [ ] Select the existing Harulib entries read-only and confirm their resolved paths are shown.
+- [ ] Create disposable Codex_Global_Smoke symbol and footprint libraries in a disposable directory.
+- [ ] Import C6119899 as symbol `Codex_C6119899` and footprint `Codex_C0805`.
+- [ ] Confirm the symbol Footprint property is `Codex_Global_Smoke:Codex_C0805`.
+- [ ] Confirm STEP/WRL files are under the sibling `Codex_Global_Smoke.3dshapes` directory.
+- [ ] Exercise cancel, skip, and overwrite without changing unrelated symbols or footprints.
+- [ ] Confirm the global backup manifest contains absolute paths, sizes, and SHA-256 values.
+- [ ] Remove the disposable table entries and files, restore original table bytes, and confirm Harulib hashes are unchanged.
+
 Record the exact KiCad build, Python version, command output, screenshots, and
 any unchecked item in the release report. An unchecked item is not a pass.
