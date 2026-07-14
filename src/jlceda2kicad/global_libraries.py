@@ -21,12 +21,24 @@ _ROOT_NAMES = {
 }
 
 
-def config_root_for_version(kicad_version: str, *, roaming_root: Path | None = None) -> Path:
+def config_root_for_version(
+    kicad_version: str,
+    *,
+    roaming_root: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> Path:
     """Return the roaming configuration directory for a KiCad major/minor version."""
     match = _VERSION.match(kicad_version.strip())
     if match is None:
         raise GlobalLibraryError(f"Unsupported KiCad version: {kicad_version}")
-    root = roaming_root or Path(os.environ["APPDATA"])
+    if roaming_root is not None:
+        root = roaming_root
+    else:
+        environment = os.environ if environ is None else environ
+        appdata = _environment_value(environment, "APPDATA")
+        if not appdata:
+            raise GlobalLibraryError("APPDATA is not set in the selected environment")
+        root = Path(appdata)
     return root / "kicad" / f"{match.group(1)}.{match.group(2)}"
 
 
@@ -71,21 +83,39 @@ def _writable(path: Path) -> bool:
     return candidate.exists() and os.access(candidate, os.W_OK)
 
 
+def _environment_value(environ: Mapping[str, str], variable: str) -> str | None:
+    normalized = variable.casefold()
+    for key, value in environ.items():
+        if key.casefold() == normalized:
+            return value
+    return None
+
+
 def _default_install_roots(environ: Mapping[str, str]) -> tuple[Path, ...]:
     roots: list[Path] = []
     for variable in ("ProgramFiles", "ProgramFiles(x86)"):
-        value = environ.get(variable)
+        value = _environment_value(environ, variable)
         if value:
             roots.append(Path(value) / "KiCad")
     return tuple(roots)
 
 
+def _read_table(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8-sig")
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeError) as error:
+        raise GlobalLibraryError(f"{path.name} could not be read: {error}") from error
+
+
 def _load_root(path: Path, expected_head: str) -> ListExpr | None:
-    if not path.is_file():
+    original = _read_table(path)
+    if original is None:
         return None
     try:
-        root = parse_one(path.read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeError, SExprError) as error:
+        root = parse_one(original)
+    except SExprError as error:
         raise GlobalLibraryError(f"{path.name} is malformed: {error}") from error
     if root.head != expected_head:
         raise GlobalLibraryError(
@@ -136,7 +166,11 @@ def discover_global_libraries(
 ) -> GlobalLibraryCatalog:
     """Discover direct, writable user libraries from KiCad global tables."""
     environment = dict(os.environ if environ is None else environ)
-    root = config_root or config_root_for_version(kicad_version)
+    root = (
+        config_root
+        if config_root is not None
+        else config_root_for_version(kicad_version, environ=environment)
+    )
     protected = install_roots or _default_install_roots(environment)
     symbols = _discover_kind(
         LibraryKind.SYMBOL,
@@ -186,14 +220,17 @@ def validate_library_destination(
         expected_suffix
     ):
         raise GlobalLibraryError("Library kind does not match its table or path")
-    if reference.registered:
-        expected_type = (
-            reference.path.is_file()
-            if reference.kind is LibraryKind.SYMBOL
-            else reference.path.is_dir()
+    expected_type = (
+        reference.path.is_file()
+        if reference.kind is LibraryKind.SYMBOL
+        else reference.path.is_dir()
+    )
+    if reference.path.exists() and not expected_type:
+        raise GlobalLibraryError(
+            f"Existing library destination has the wrong type: {reference.path}"
         )
-        if not expected_type:
-            raise GlobalLibraryError(f"Registered library disappeared: {reference.path}")
+    if reference.registered and not expected_type:
+        raise GlobalLibraryError(f"Registered library disappeared: {reference.path}")
     protected = install_roots or _default_install_roots(environment)
     if any(_within(reference.path, root) for root in protected):
         raise GlobalLibraryError(f"Library destination is protected: {reference.path}")
@@ -212,11 +249,11 @@ def build_global_registration(
         reference, environ=environ, install_roots=install_roots
     )
     filename, root_name, _ = _ROOT_NAMES[reference.kind]
-    if reference.table_path.exists():
-        original = reference.table_path.read_text(encoding="utf-8-sig")
+    original = _read_table(reference.table_path)
+    if original is not None:
         try:
             root = parse_one(original)
-        except (OSError, UnicodeError, SExprError) as error:
+        except SExprError as error:
             raise GlobalLibraryError(f"{filename} is malformed: {error}") from error
         if root.head != root_name:
             raise GlobalLibraryError(
@@ -233,10 +270,10 @@ def build_global_registration(
             continue
         environment = dict(os.environ if environ is None else environ)
         existing = _resolve_uri(fields.get("uri", ""), environment)
-        if existing == reference.path:
+        if fields.get("type") == "KiCad" and existing == reference.path:
             return {}
         raise GlobalLibraryError(
-            f"Library nickname {reference.nickname!r} is registered to a different path"
+            f"Library nickname {reference.nickname!r} is registered to a different path or type"
         )
     if not _writable(reference.table_path):
         raise GlobalLibraryError(f"Global table is not writable: {reference.table_path}")
