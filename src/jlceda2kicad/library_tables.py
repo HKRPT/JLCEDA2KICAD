@@ -83,15 +83,25 @@ def _write_atomic(path: Path, text: str) -> None:
 
 def build_project_library_table_updates(
     project_root: Path,
+    *,
+    register_symbol: bool = True,
+    register_footprint: bool = True,
 ) -> tuple[dict[Path, str], LibraryRegistrationResult]:
     """Build table contents without touching disk, after validating both tables."""
+    selected = {
+        "sym-lib-table": register_symbol,
+        "fp-lib-table": register_footprint,
+    }
     loaded: dict[str, tuple[str | None, ListExpr | None]] = {}
     for filename, (root_name, _) in _TABLES.items():
-        loaded[filename] = _load_table(project_root / filename, root_name)
+        if selected[filename]:
+            loaded[filename] = _load_table(project_root / filename, root_name)
 
-    changed: dict[str, bool] = {}
+    changed = {"sym-lib-table": False, "fp-lib-table": False}
     updates: dict[Path, str] = {}
     for filename, (root_name, uri) in _TABLES.items():
+        if not selected[filename]:
+            continue
         text, root = loaded[filename]
         already_registered = root is not None and _has_library(root, "LCSC_Project")
         changed[filename] = not already_registered

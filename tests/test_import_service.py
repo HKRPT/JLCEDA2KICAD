@@ -140,3 +140,60 @@ def test_corrupt_library_table_aborts_before_any_project_file_changes(tmp_path: 
 
     assert table.read_text(encoding="utf-8") == "(sym_lib_table (broken)"
     assert not (project / ".jlceda2kicad_backup").exists()
+
+
+def test_model_only_import_does_not_register_missing_component_libraries(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    shadow = tmp_path / "shadow"
+    formal = _write_shadow_artifacts(shadow)
+    options = ImportOptions(symbol=False, footprint=False, step=True, wrl=False)
+
+    report = import_shadow_artifacts(project, shadow, "C2040", formal, options)
+
+    assert report.success
+    assert (project / "libs" / "lcsc_project.3dshapes" / "NewPart.step").is_file()
+    assert not (project / "sym-lib-table").exists()
+    assert not (project / "fp-lib-table").exists()
+    assert report.library_registration == ()
+
+
+def test_import_refuses_footprint_with_missing_selected_model(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    shadow = tmp_path / "shadow"
+    formal = _write_shadow_artifacts(shadow)
+    formal.wrl_models[0].unlink()
+    options = ImportOptions(step=False, wrl=True)
+
+    with pytest.raises(ImportServiceError, match="模型引用"):
+        import_shadow_artifacts(project, shadow, "C2040", formal, options)
+
+    assert not (project / ".jlceda2kicad_backup").exists()
+
+
+def test_stp_model_is_promoted_as_step_to_match_rewritten_reference(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    shadow = tmp_path / "shadow"
+    formal = _write_shadow_artifacts(shadow)
+    stp = formal.step_models[0].with_suffix(".stp")
+    formal.step_models[0].rename(stp)
+    preview = ArtifactSet(
+        formal.root,
+        symbol_libraries=formal.symbol_libraries,
+        footprints=formal.footprints,
+        step_models=(stp,),
+        wrl_models=formal.wrl_models,
+    )
+
+    report = import_shadow_artifacts(
+        project,
+        shadow,
+        "C2040",
+        preview,
+        ImportOptions(step=True, wrl=False),
+    )
+
+    assert report.success
+    assert (project / "libs" / "lcsc_project.3dshapes" / "NewPart.step").is_file()
+    assert not (project / "libs" / "lcsc_project.3dshapes" / "NewPart.stp").exists()

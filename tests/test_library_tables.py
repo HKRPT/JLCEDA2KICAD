@@ -69,3 +69,12 @@ def test_build_table_updates_is_pure_until_transaction_commits(tmp_path: Path) -
     assert result.symbol_registered and result.footprint_registered
     assert not (tmp_path / "sym-lib-table").exists()
     assert '(name "LCSC_Project")' in updates[tmp_path / "sym-lib-table"]
+
+
+def test_build_table_updates_can_register_only_selected_library(tmp_path: Path) -> None:
+    updates, result = build_project_library_table_updates(
+        tmp_path, register_symbol=False, register_footprint=True
+    )
+
+    assert {path.name for path in updates} == {"fp-lib-table"}
+    assert not result.symbol_registered and result.footprint_registered

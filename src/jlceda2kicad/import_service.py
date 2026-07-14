@@ -94,6 +94,9 @@ def import_shadow_artifacts(
     registration: list[str] = []
     symbol_validation = None
     footprint_validations = []
+    target_symbol = project_root / "libs" / "lcsc_project.kicad_sym"
+    target_footprint_dir = project_root / "libs" / "lcsc_project.pretty"
+    target_model_dir = project_root / "libs" / "lcsc_project.3dshapes"
 
     try:
         if options.symbol:
@@ -104,7 +107,6 @@ def import_shadow_artifacts(
             incoming_text = extract_symbol_component_library(formal_text, normalized)
             incoming_stage = _stage_text(staging_root, "incoming.kicad_sym", incoming_text)
             symbol_validation = validate_symbol_library(incoming_stage)
-            target_symbol = project_root / "libs" / "lcsc_project.kicad_sym"
             existing_text = (
                 target_symbol.read_text(encoding="utf-8-sig") if target_symbol.is_file() else None
             )
@@ -135,9 +137,7 @@ def import_shadow_artifacts(
                 staging_root, f"libs/lcsc_project.pretty/{footprint.name}", rewritten
             )
             footprint_validations.append(validate_footprint(staged))
-            footprint_mappings[staged] = (
-                project_root / "libs" / "lcsc_project.pretty" / footprint.name
-            )
+            footprint_mappings[staged] = target_footprint_dir / footprint.name
 
         model_mappings: dict[Path, Path] = {}
         if options.step:
@@ -145,13 +145,13 @@ def import_shadow_artifacts(
             if not selected_steps:
                 warnings.append("正式转换没有生成 STEP 模型。")
             for model in selected_steps:
-                model_mappings[model] = project_root / "libs" / "lcsc_project.3dshapes" / model.name
+                model_mappings[model] = target_model_dir / model.with_suffix(".step").name
         if options.wrl:
             selected_wrl = _select_by_preview(formal.wrl_models, preview_artifacts.wrl_models)
             if not selected_wrl:
                 warnings.append("正式转换没有生成 WRL 模型。")
             for model in selected_wrl:
-                model_mappings[model] = project_root / "libs" / "lcsc_project.3dshapes" / model.name
+                model_mappings[model] = target_model_dir / model.name
 
         selected_files, skipped_files = resolve_file_conflicts(
             footprint_mappings | model_mappings, options.conflict_policy
@@ -159,11 +159,29 @@ def import_shadow_artifacts(
         mappings.update(selected_files)
         warnings.extend(f"文件已存在，按策略跳过：{path.name}" for path in skipped_files)
 
+        planned_targets = set(selected_files.values())
+        for validation in footprint_validations:
+            for model_path in validation.model_paths:
+                referenced_target = target_model_dir / Path(model_path).name
+                if not referenced_target.is_file() and referenced_target not in planned_targets:
+                    raise ImportServiceError(f"模型引用没有对应的可提交文件：{model_path}")
+
         if symbol_validation is not None:
             for validation in footprint_validations:
                 warnings.extend(symbol_validation.compare_pad_numbers(validation))
 
-        table_updates, table_result = build_project_library_table_updates(project_root)
+        register_symbol = options.symbol and (
+            target_symbol.is_file() or target_symbol in mappings.values()
+        )
+        register_footprint = options.footprint and (
+            target_footprint_dir.is_dir()
+            or any(target.parent == target_footprint_dir for target in mappings.values())
+        )
+        table_updates, table_result = build_project_library_table_updates(
+            project_root,
+            register_symbol=register_symbol,
+            register_footprint=register_footprint,
+        )
         for target, text in table_updates.items():
             staged = _stage_text(staging_root, f"tables/{target.name}", text)
             mappings[staged] = target
