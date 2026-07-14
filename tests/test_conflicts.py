@@ -58,6 +58,34 @@ def test_symbol_merge_creates_a_library_when_none_exists() -> None:
     assert result.skipped is False
 
 
+def test_overwrite_removes_name_and_lcsc_collisions_only() -> None:
+    existing = '''(kicad_symbol_lib (version 20231120)
+      (symbol "Keep" (property "LCSC Part" "C1"))
+      (symbol "Custom" (property "LCSC Part" "C2"))
+      (symbol "OldName" (property "LCSC Part" "C2040")))'''
+    incoming = '''(kicad_symbol_lib (version 20231120)
+      (symbol "Custom" (property "LCSC Part" "C2040")))'''
+
+    result = merge_symbol_library(
+        existing, incoming, "C2040", ConflictPolicy.OVERWRITE_COMPONENT
+    )
+
+    assert 'symbol "Keep"' in result.text
+    assert 'symbol "OldName"' not in result.text
+    assert result.text.count('symbol "Custom"') == 1
+    assert set(result.overwritten_names) == {"Custom", "OldName"}
+
+
+def test_cancel_reports_the_existing_name_for_same_lcsc_id() -> None:
+    existing = '''(kicad_symbol_lib (version 20231120)
+      (symbol "OldName" (property "LCSC Part" "C2040")))'''
+    incoming = '''(kicad_symbol_lib (version 20231120)
+      (symbol "NewName" (property "LCSC Part" "C2040")))'''
+
+    with pytest.raises(ComponentConflictError, match="OldName"):
+        merge_symbol_library(existing, incoming, "C2040", ConflictPolicy.CANCEL)
+
+
 def test_file_skip_policy_keeps_only_missing_targets(tmp_path: Path) -> None:
     existing = tmp_path / "part.kicad_mod"
     existing.write_text("old", encoding="utf-8")
