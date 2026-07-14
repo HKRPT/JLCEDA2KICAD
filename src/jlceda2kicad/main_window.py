@@ -144,6 +144,7 @@ class MainWindow(QMainWindow):
         self._shadow: Path | None = None
         self._queue: list[CommandSpec] = []
         self._phase = "idle"
+        self._closing = False
         self._failures: list[str] = []
         self._import_options: ImportOptions | None = None
         self._build_ui()
@@ -297,6 +298,7 @@ class MainWindow(QMainWindow):
             self.status_label.setText(f"C 编号无效：{error}")
             return
         self.lcsc_input.setText(lcsc_id)
+        self.library_target.set_generated_names("", "")
         self.artifacts = None
         self.import_button.setEnabled(False)
         self._workspace = self.temp_manager.create(f"preview-{lcsc_id}")
@@ -406,6 +408,8 @@ class MainWindow(QMainWindow):
         )
 
     def _run_next(self) -> None:
+        if self._closing:
+            return
         if not self._queue:
             if self._phase == "preview":
                 self._finish_preview()
@@ -417,6 +421,8 @@ class MainWindow(QMainWindow):
         self.controller.start(command, timeout_ms=self.settings.timeout_seconds * 1_000)
 
     def _process_completed(self, result: ProcessResult) -> None:
+        if self._closing:
+            return
         if not result.succeeded:
             if result.timed_out:
                 reason = "命令超时"
@@ -431,6 +437,8 @@ class MainWindow(QMainWindow):
         self._run_next()
 
     def _finish_preview(self) -> None:
+        if self._closing:
+            return
         assert self._workspace is not None
         self.artifacts = discover_artifacts(self._workspace)
         self._render_artifacts(self.artifacts)
@@ -489,6 +497,8 @@ class MainWindow(QMainWindow):
             self._append_log(f"无法读取转换名称：{error}")
 
     def _finish_import(self) -> None:
+        if self._closing:
+            return
         if self._failures:
             self._phase = "idle"
             self._set_busy(False, "正式转换失败，真实工程未修改。")
@@ -598,6 +608,8 @@ class MainWindow(QMainWindow):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.artifacts.root)))
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        self._closing = True
+        self._queue.clear()
         if getattr(self.controller, "is_running", False):
             self.controller.cancel()
         encoded_geometry = self.saveGeometry().toBase64().data()

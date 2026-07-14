@@ -198,6 +198,11 @@ def test_cancel_button_delegates_to_running_process(qtbot: object, tmp_path: Pat
 
     assert controller.cancelled
 
+    controller.completed.emit(ProcessResult(1, True, "", "", cancelled=True))
+
+    assert window._phase == "idle"
+    assert not window.cancel_button.isEnabled()
+
 
 def test_preview_populates_editable_generated_names(qtbot: object, tmp_path: Path) -> None:
     window, controller = _window(tmp_path)
@@ -220,6 +225,87 @@ def test_preview_populates_editable_generated_names(qtbot: object, tmp_path: Pat
 
     assert window.library_target.symbol_name.text() == "Part"
     assert window.library_target.footprint_name.text() == "Foot"
+
+
+def test_new_preview_does_not_keep_names_when_generated_name_parsing_fails(
+    qtbot: object, tmp_path: Path
+) -> None:
+    window, controller = _window(tmp_path)
+    qtbot.addWidget(window)  # type: ignore[attr-defined]
+    window.lcsc_input.setText("C2040")
+    window.preview_button.click()
+    first = controller.commands[0]
+    first_base = Path(first.arguments[first.arguments.index("--output") + 1])  # type: ignore[attr-defined]
+    first_base.with_suffix(".kicad_sym").write_text(
+        '(kicad_symbol_lib (version 20231120) (symbol "OldSymbol" '
+        '(property "LCSC Part" "C2040")))',
+        encoding="utf-8",
+    )
+    first_pretty = first_base.with_suffix(".pretty")
+    first_pretty.mkdir()
+    (first_pretty / "OldFootprint.kicad_mod").write_text(
+        '(footprint "OldFootprint")', encoding="utf-8"
+    )
+    controller.completed.emit(ProcessResult(0, True, "", ""))
+    controller.completed.emit(ProcessResult(0, True, "", ""))
+    assert window.library_target.symbol_name.text() == "OldSymbol"
+    assert window.library_target.footprint_name.text() == "OldFootprint"
+
+    window.lcsc_input.setText("C2041")
+    window.preview_button.click()
+    second = controller.commands[2]
+    second_base = Path(second.arguments[second.arguments.index("--output") + 1])  # type: ignore[attr-defined]
+    second_base.with_suffix(".kicad_sym").write_text("not a symbol library", encoding="utf-8")
+    second_pretty = second_base.with_suffix(".pretty")
+    second_pretty.mkdir()
+    (second_pretty / "FreshFootprint.kicad_mod").write_text(
+        '(footprint "FreshFootprint")', encoding="utf-8"
+    )
+    controller.completed.emit(ProcessResult(0, True, "", ""))
+    controller.completed.emit(ProcessResult(0, True, "", ""))
+
+    assert window.artifacts is not None and window.artifacts.has_any
+    assert window.library_target.symbol_name.text() == ""
+    assert window.library_target.footprint_name.text() == ""
+
+
+def test_closing_during_preview_does_not_start_the_queued_svg_command(
+    qtbot: object, tmp_path: Path
+) -> None:
+    window, controller = _window(tmp_path)
+    qtbot.addWidget(window)  # type: ignore[attr-defined]
+    window.lcsc_input.setText("C2040")
+    window.preview_button.click()
+    assert len(controller.commands) == 1
+
+    window.close()
+    controller.completed.emit(ProcessResult(1, True, "", "", cancelled=True))
+
+    assert controller.cancelled
+    assert len(controller.commands) == 1
+
+
+def test_closing_during_import_does_not_show_a_completion_dialog(
+    qtbot: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    window, controller = _window(tmp_path)
+    qtbot.addWidget(window)  # type: ignore[attr-defined]
+    window.artifacts = _preview_artifacts(tmp_path / "preview")
+    window.lcsc_input.setText("C2040")
+    window.start_import()
+    assert len(controller.commands) == 1
+    dialogs: list[tuple[object, ...]] = []
+    monkeypatch.setattr(
+        "jlceda2kicad.main_window.QMessageBox.critical",
+        lambda *args: dialogs.append(args),
+    )
+
+    window.close()
+    controller.completed.emit(ProcessResult(1, True, "", "", cancelled=True))
+
+    assert controller.cancelled
+    assert len(controller.commands) == 1
+    assert dialogs == []
 
 
 def test_global_import_builds_formal_commands_without_seeding_project_library(
