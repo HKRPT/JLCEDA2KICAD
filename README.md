@@ -37,21 +37,18 @@ The plugin metadata uses `runtime: ipc`; no legacy `pcbnew` SWIG API is used.
 
 ## Development install
 
-Install the pinned dependencies into each KiCad Python runtime first, for example:
-
-```powershell
-& "C:\Program Files\KiCad\10.0\bin\python.exe" -m pip install --user -r requirements.txt
-& "C:\Program Files\KiCad\9.0\bin\python.exe" -m pip install --user -r requirements.txt
-```
-
-Then copy only this plugin into the user plugin directories:
+Copy only this plugin into the user IPC plugin directories:
 
 ```powershell
 ./scripts/install_dev.ps1
 ```
 
-Restart PCB Editor. The action is named **JLCEDA2KICAD Importer** and appears in
-the PCB toolbar. To uninstall only this plugin:
+Restart PCB Editor and select **Tools > External Plugins > Refresh Plugins** if
+the action is not loaded automatically. KiCad creates a dedicated Python
+environment and installs the pinned packages from `requirements.txt`; do not
+install them into KiCad's base Python with `--user`. The action is named
+**JLCEDA2KICAD Importer** and appears as the green JLC button in the PCB toolbar.
+To uninstall only this plugin:
 
 ```powershell
 ./scripts/uninstall_dev.ps1

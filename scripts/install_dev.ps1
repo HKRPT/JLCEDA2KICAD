@@ -5,13 +5,14 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$identifier = "com.github.hkrpt.jlceda2kicad"
+$identifier = "io.hkrpt.jlc"
+$documentsRoot = [Environment]::GetFolderPath("MyDocuments")
 
 foreach ($version in $KiCadVersions) {
     if ($version -notmatch '^\d+\.\d+$') {
         throw "Invalid KiCad version directory: $version"
     }
-    $pluginsRoot = [IO.Path]::GetFullPath((Join-Path $env:APPDATA "kicad\$version\plugins"))
+    $pluginsRoot = [IO.Path]::GetFullPath((Join-Path $documentsRoot "KiCad\$version\plugins"))
     $destination = [IO.Path]::GetFullPath((Join-Path $pluginsRoot $identifier))
     if (-not $destination.StartsWith($pluginsRoot + [IO.Path]::DirectorySeparatorChar)) {
         throw "Refusing destination outside KiCad plugins directory: $destination"
@@ -31,4 +32,4 @@ foreach ($version in $KiCadVersions) {
     Write-Host "Installed: $destination"
 }
 
-Write-Host "This script only copies plugin files. Install requirements with each KiCad Python runtime if needed."
+Write-Host "Restart PCB Editor and refresh plugins. KiCad will create the dedicated Python environment and install requirements.txt."

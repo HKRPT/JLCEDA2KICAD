@@ -1,6 +1,6 @@
 {
   "$schema": "https://go.kicad.org/api/schemas/v1",
-  "identifier": "com.github.hkrpt.jlceda2kicad",
+  "identifier": "io.hkrpt.jlc",
   "name": "JLCEDA2KICAD Importer",
   "description": "Preview and import one LCSC component into the current KiCad project",
   "runtime": {
@@ -20,4 +20,3 @@
     }
   ]
 }
-

@@ -12,3 +12,9 @@ All notable changes to this project are documented here.
 - Component conflict policies and project-relative STEP/WRL handling.
 - Manifest backups, atomic commit, rollback, and idempotent project library tables.
 - Settings, history, rotating redacted logs, development install scripts, PCM packaging, and CI.
+
+### Fixed
+
+- Install IPC plugins under the user's Documents-based KiCad plugin directory.
+- Use a shorter plugin identifier so pinned PySide6 files stay below the Windows
+  legacy 260-character path limit in KiCad's managed environment.

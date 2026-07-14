@@ -35,20 +35,16 @@ LCSC C 编号，使用 PySide6 异步调用 `easyeda2kicad`，先在唯一临时
 
 ## 开发安装
 
-先为每个 KiCad Python 安装固定依赖，例如：
-
-```powershell
-& "C:\Program Files\KiCad\10.0\bin\python.exe" -m pip install --user -r requirements.txt
-& "C:\Program Files\KiCad\9.0\bin\python.exe" -m pip install --user -r requirements.txt
-```
-
-然后只复制本插件到 KiCad 9/10 用户插件目录：
+只复制本插件到 KiCad 9/10 用户 IPC 插件目录：
 
 ```powershell
 ./scripts/install_dev.ps1
 ```
 
-重启 PCB 编辑器，工具栏动作名为 **JLCEDA2KICAD Importer**。卸载只删除本插件：
+重启 PCB 编辑器；若插件没有自动加载，请选择“工具 → 外部插件 → 刷新插件”。KiCad
+会建立插件专用 Python 环境并按 `requirements.txt` 安装固定依赖，不要使用 `--user`
+把依赖装入 KiCad 的基础 Python。工具栏中的绿色 JLC 按钮就是
+**JLCEDA2KICAD Importer**。卸载只删除本插件：
 
 ```powershell
 ./scripts/uninstall_dev.ps1

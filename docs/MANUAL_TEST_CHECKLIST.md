@@ -3,8 +3,10 @@
 Use disposable projects only. Run the full list separately in KiCad 9.0.6 and
 10.0.4 on Windows.
 
-- [ ] Install dependencies into the selected KiCad Python 3.11 runtime.
-- [ ] Run `scripts/install_dev.ps1`; confirm only this plugin directory changes.
+- [ ] Run `scripts/install_dev.ps1`; confirm only the Documents-based IPC plugin
+  directory changes.
+- [ ] Refresh plugins and confirm KiCad creates the dedicated Python environment
+  with all pinned dependencies.
 - [ ] Start PCB Editor and confirm the toolbar icon/action is visible.
 - [ ] Launch the PySide6 window and confirm the IPC project path and KiCad version.
 - [ ] Select a different disposable project manually, including a Chinese/space path.
