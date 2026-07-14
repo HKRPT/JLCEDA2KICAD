@@ -1,6 +1,5 @@
 """Asynchronous, shell-free QProcess adapter with timeout and cancellation."""
 
-import locale
 from dataclasses import dataclass
 
 from PySide6.QtCore import QByteArray, QObject, QProcess, QProcessEnvironment, QTimer, Signal
@@ -36,7 +35,7 @@ class ProcessController(QObject):
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._kill_grace_ms = kill_grace_ms
-        self._output_encoding = locale.getpreferredencoding(False)
+        self._output_encoding = "utf-8"
         self._stdout: list[str] = []
         self._stderr: list[str] = []
         self._timed_out = False
@@ -63,7 +62,13 @@ class ProcessController(QObject):
         self._timed_out = False
         self._cancelled = False
         self._completed = False
-        self._process.setProcessEnvironment(QProcessEnvironment.systemEnvironment())
+        environment = QProcessEnvironment.systemEnvironment()
+        # Every supported converter command is launched through sys.executable.
+        # Pin its standard streams to UTF-8 so non-ASCII project paths work even
+        # when a Windows runner or host uses a legacy ANSI console code page.
+        environment.insert("PYTHONIOENCODING", "utf-8")
+        environment.insert("PYTHONUTF8", "1")
+        self._process.setProcessEnvironment(environment)
         self._process.setWorkingDirectory(str(command.working_dir))
         self._process.setProgram(str(command.program))
         self._process.setArguments(list(command.arguments))

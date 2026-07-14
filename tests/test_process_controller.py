@@ -45,12 +45,14 @@ def test_process_controller_uses_exact_unicode_working_directory_and_inherits_en
     working_dir = tmp_path / "中文 工程"
     working_dir.mkdir()
     monkeypatch.setenv("JLCEDA2KICAD_TEST_PROXY", "inherited")
+    monkeypatch.setenv("PYTHONIOENCODING", "cp1252")
     controller = ProcessController()
 
     with qtbot.waitSignal(controller.completed, timeout=5_000) as blocker:  # type: ignore[attr-defined]
         controller.start(
             _command(
-                "import os; print(os.getcwd()); print(os.environ['JLCEDA2KICAD_TEST_PROXY'])",
+                "import os; print(os.getcwd()); print('转换成功'); "
+                "print(os.environ['JLCEDA2KICAD_TEST_PROXY'])",
                 working_dir,
             ),
             timeout_ms=2_000,
@@ -59,6 +61,7 @@ def test_process_controller_uses_exact_unicode_working_directory_and_inherits_en
     result = blocker.args[0]
     assert result.succeeded
     assert str(working_dir) in result.stdout
+    assert "转换成功" in result.stdout
     assert "inherited" in result.stdout
 
 
