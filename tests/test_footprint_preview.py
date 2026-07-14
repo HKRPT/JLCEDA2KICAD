@@ -71,6 +71,23 @@ def test_parse_footprint_warns_and_skips_unknown_graphic() -> None:
     assert "fp_curve" in preview.warnings[0]
 
 
+def test_parse_easyeda_legacy_module_and_angle_arc() -> None:
+    preview = parse_footprint(
+        """(module easyeda2kicad:C0805 (layer F.Cu)
+  (pad 1 smd rect (at -1 0 0) (size 1.41 1.35) (layers F.Cu F.Paste F.Mask))
+  (fp_arc (start 1.81 0.75) (end 1.96 0.75) (angle 90)
+    (layer F.SilkS) (width 0.15)))"""
+    )
+
+    assert preview.name == "C0805"
+    assert len(preview.primitives) == 2
+    arc = preview.primitives[1]
+    assert isinstance(arc, ArcPrimitive)
+    assert arc.start == pytest.approx((1.96, 0.75))
+    assert arc.mid == pytest.approx((1.916066, 0.856066), abs=1e-6)
+    assert arc.end == pytest.approx((1.81, 0.9))
+
+
 def test_parse_footprint_rejects_invalid_and_unbounded_coordinates() -> None:
     with pytest.raises(FootprintPreviewError, match="footprint"):
         parse_footprint('(symbol "wrong")')

@@ -46,6 +46,21 @@ def test_footprint_validation_accepts_project_relative_model_reference(
     assert result.model_paths == ("${KIPRJMOD}/libs/lcsc_project.3dshapes/good.step",)
 
 
+def test_footprint_validation_accepts_easyeda_legacy_module(tmp_path: Path) -> None:
+    footprint = tmp_path / "C0805.kicad_mod"
+    footprint.write_text(
+        """(module easyeda2kicad:C0805 (layer F.Cu)
+  (pad 1 smd rect (at 0 0) (size 1 1) (layers F.Cu F.Paste F.Mask))
+  (model "${KIPRJMOD}/libs/lcsc_project.3dshapes/C0805.wrl"))""",
+        encoding="utf-8",
+    )
+
+    result = validate_footprint(footprint)
+
+    assert result.pin_or_pad_numbers == frozenset({"1"})
+    assert result.model_paths == ("${KIPRJMOD}/libs/lcsc_project.3dshapes/C0805.wrl",)
+
+
 def test_pin_pad_number_difference_is_warning_not_failure(tmp_path: Path) -> None:
     symbol = tmp_path / "lib.kicad_sym"
     symbol.write_text(

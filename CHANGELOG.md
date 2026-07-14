@@ -18,3 +18,5 @@ All notable changes to this project are documented here.
 - Install IPC plugins under the user's Documents-based KiCad plugin directory.
 - Use a shorter plugin identifier so pinned PySide6 files stay below the Windows
   legacy 260-character path limit in KiCad's managed environment.
+- Preview and import the legacy `(module ...)` footprints and angle-based arcs
+  emitted by `easyeda2kicad==1.0.1`.

@@ -104,6 +104,31 @@ def test_import_shadow_commits_component_tables_and_step_only_reference(
     assert set(report.library_registration) == {"LCSC_Project (symbol)", "LCSC_Project (footprint)"}
 
 
+def test_import_shadow_accepts_easyeda_legacy_module(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    shadow = tmp_path / "shadow"
+    formal = _write_shadow_artifacts(shadow)
+    footprint = formal.footprints[0]
+    footprint.write_text(
+        footprint.read_text(encoding="utf-8").replace(
+            '(footprint "NewPart"', "(module easyeda2kicad:NewPart", 1
+        ),
+        encoding="utf-8",
+    )
+
+    report = import_shadow_artifacts(
+        project,
+        shadow,
+        "C2040",
+        formal,
+        ImportOptions(step=False, wrl=True),
+    )
+
+    assert report.success
+    imported = project / "libs" / "lcsc_project.pretty" / "NewPart.kicad_mod"
+    assert imported.read_text(encoding="utf-8").startswith("(module easyeda2kicad:NewPart")
+
+
 def test_skip_policy_skips_colliding_footprint_but_imports_missing_model(
     tmp_path: Path,
 ) -> None:

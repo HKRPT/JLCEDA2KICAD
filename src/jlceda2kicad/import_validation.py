@@ -27,7 +27,9 @@ class ArtifactValidation:
         )
 
 
-def _parse_file(path: Path, expected_head: str) -> ListExpr:
+def _parse_file(
+    path: Path, expected_head: str, *, alternative_heads: tuple[str, ...] = ()
+) -> ListExpr:
     if not path.is_file() or path.stat().st_size == 0:
         raise ImportValidationError(f"空文件或文件不存在：{path}")
     try:
@@ -38,7 +40,7 @@ def _parse_file(path: Path, expected_head: str) -> ListExpr:
         root = parse_one(text)
     except SExprError as error:
         raise ImportValidationError(f"S 表达式括号或字符串无效：{error}") from error
-    if root.head != expected_head:
+    if root.head not in (expected_head, *alternative_heads):
         raise ImportValidationError(
             f"文件类型错误：需要 {expected_head}，实际为 {root.head or '未知'}。"
         )
@@ -88,7 +90,7 @@ def _validate_model_path(model_path: str) -> None:
 
 
 def validate_footprint(path: Path) -> ArtifactValidation:
-    root = _parse_file(path, "footprint")
+    root = _parse_file(path, "footprint", alternative_heads=("module",))
     nodes = _walk(root)
     pad_numbers = {
         node.atoms[1].value

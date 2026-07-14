@@ -1,5 +1,6 @@
 """Pure parser for the KiCad footprint primitives rendered by the Qt preview."""
 
+import math
 from dataclasses import dataclass
 from typing import TypeAlias
 
@@ -193,9 +194,35 @@ def _parse_graphic(expression: ListExpr) -> Primitive:
             layer=layer,
         )
     if expression.head == "fp_arc":
+        mid = _child(expression, "mid")
+        if mid is None:
+            center = _point(expression, "start")
+            arc_start = _point(expression, "end")
+            angle_node = _child(expression, "angle")
+            angle_values = _numbers(angle_node) if angle_node is not None else ()
+            if not angle_values:
+                raise FootprintPreviewError("旧式 fp_arc 缺少 angle。")
+
+            def rotate(angle_degrees: float) -> Point:
+                radians = math.radians(angle_degrees)
+                offset_x = arc_start[0] - center[0]
+                offset_y = arc_start[1] - center[1]
+                return (
+                    center[0] + offset_x * math.cos(radians) - offset_y * math.sin(radians),
+                    center[1] + offset_x * math.sin(radians) + offset_y * math.cos(radians),
+                )
+
+            angle = angle_values[0]
+            return ArcPrimitive(
+                arc_start,
+                rotate(angle / 2.0),
+                rotate(angle),
+                width=width,
+                layer=layer,
+            )
         return ArcPrimitive(
             _point(expression, "start"),
-            _point(expression, "mid"),
+            _point_node(mid),
             _point(expression, "end"),
             width=width,
             layer=layer,
@@ -223,10 +250,12 @@ def parse_footprint(text: str) -> FootprintPreview:
         root = parse_one(text)
     except SExprError as error:
         raise FootprintPreviewError(f"封装 S 表达式无效：{error}") from error
-    if root.head != "footprint":
+    if root.head not in {"footprint", "module"}:
         raise FootprintPreviewError("预览内容不是 footprint。")
     atoms = root.atoms
     name = atoms[1].value if len(atoms) >= 2 else "未命名封装"
+    if root.head == "module":
+        name = name.rsplit(":", 1)[-1]
     primitives: list[Primitive] = []
     warnings: list[str] = []
     supported = {"fp_line", "fp_rect", "fp_circle", "fp_arc", "fp_poly"}

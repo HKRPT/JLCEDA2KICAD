@@ -63,3 +63,16 @@ def test_development_installer_targets_documents_ipc_plugin_directory() -> None:
 
     assert result.returncode == 0, result.stderr
     assert str(expected) in result.stdout
+
+
+def test_development_installer_does_not_delete_running_plugin_directory() -> None:
+    script = (ROOT / "scripts" / "install_dev.ps1").read_text(encoding="utf-8")
+
+    assert "Remove-Item -LiteralPath $destination" not in script
+
+
+def test_development_installer_merges_existing_plugin_directories() -> None:
+    script = (ROOT / "scripts" / "install_dev.ps1").read_text(encoding="utf-8")
+
+    assert '"resources\\*"' in script
+    assert '"src\\jlceda2kicad\\*.py"' in script
