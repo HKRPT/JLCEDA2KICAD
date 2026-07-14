@@ -52,7 +52,6 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
-      - run: python scripts/render_icons.py
       - run: python scripts/build_package.py
       - run: python -m kipy.packaging validate dist/JLCEDA2KICAD-0.1.0.zip
       - uses: actions/upload-artifact@v4
