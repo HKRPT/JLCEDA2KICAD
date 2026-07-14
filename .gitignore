@@ -16,5 +16,6 @@ build/
 temp/
 tmp/
 .smoke/
+.worktrees/
 .idea/
 .vscode/
