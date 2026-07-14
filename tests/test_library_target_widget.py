@@ -564,6 +564,60 @@ def test_create_library_with_invalid_version_records_error_without_opening_dialo
 
     assert "Unsupported KiCad version" in widget.catalog_error
     assert warnings == [widget.catalog_error]
+    assert widget.new_symbol_button.isEnabled()
+    assert widget.new_footprint_button.isEnabled()
+
+
+def test_new_library_actions_recover_after_configuration_becomes_available(
+    qtbot: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    widget = LibraryTargetWidget(
+        AppSettings(last_import_scope=ImportScope.GLOBAL),
+        kicad_version="",
+        config_root=None,
+    )
+    qtbot.addWidget(widget)  # type: ignore[attr-defined]
+    created: list[tuple[LibraryKind, Path]] = []
+
+    class RejectedDialog:
+        def __init__(
+            self, kind: LibraryKind, config_root: Path, _parent: object
+        ) -> None:
+            created.append((kind, config_root))
+
+        def exec(self) -> target_widgets.QDialog.DialogCode:
+            return target_widgets.QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(target_widgets.QMessageBox, "warning", lambda *_args: None)
+    monkeypatch.setattr(target_widgets, "NewLibraryDialog", RejectedDialog)
+
+    widget._create_library(LibraryKind.SYMBOL)
+    widget.kicad_version = "10.0.4"
+    widget.config_root = tmp_path / "config"
+    widget.refresh()
+
+    assert widget.new_symbol_button.isEnabled()
+    assert widget.new_footprint_button.isEnabled()
+
+    widget._create_library(LibraryKind.FOOTPRINT)
+
+    assert created == [(LibraryKind.FOOTPRINT, tmp_path / "config")]
+
+
+def test_refresh_does_not_override_externally_disabled_new_library_actions(
+    qtbot: object, tmp_path: Path
+) -> None:
+    widget = LibraryTargetWidget(
+        AppSettings(last_import_scope=ImportScope.GLOBAL),
+        kicad_version="10.0.4",
+        config_root=tmp_path / "config",
+    )
+    qtbot.addWidget(widget)  # type: ignore[attr-defined]
+    widget.new_symbol_button.setEnabled(False)
+    widget.new_footprint_button.setEnabled(False)
+
+    widget.refresh()
+
     assert not widget.new_symbol_button.isEnabled()
     assert not widget.new_footprint_button.isEnabled()
 

@@ -339,8 +339,6 @@ class LibraryTargetWidget(QGroupBox):
                 self.config_root = config_root_for_version(self.kicad_version)
             except GlobalLibraryError as error:
                 self.catalog_error = str(error)
-                self.new_symbol_button.setEnabled(False)
-                self.new_footprint_button.setEnabled(False)
                 QMessageBox.warning(self, "无法确定 KiCad 配置目录", self.catalog_error)
                 return
         dialog = NewLibraryDialog(kind, self.config_root, self)
