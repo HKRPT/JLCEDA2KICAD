@@ -86,3 +86,12 @@ class ImportOptions:
     use_cache: bool = True
     open_library_dir: bool = True
     conflict_policy: ConflictPolicy = ConflictPolicy.CANCEL
+
+
+@dataclass(frozen=True, slots=True)
+class ImportReport:
+    success: bool
+    committed_paths: tuple[Path, ...] = ()
+    warnings: tuple[str, ...] = ()
+    backup_dir: Path | None = None
+    rollback_result: tuple[str, ...] = ()
