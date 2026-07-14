@@ -1,0 +1,28 @@
+{
+  "$schema": "https://go.kicad.org/pcm/schemas/v1",
+  "name": "JLCEDA2KICAD Importer",
+  "description": "Preview and import one LCSC component into a KiCad project.",
+  "description_full": "Unofficial personal tool that uses easyeda2kicad to preview and transactionally import symbols, footprints, and 3D models into project-local KiCad libraries.",
+  "identifier": "com.github.hkrpt.jlceda2kicad",
+  "type": "plugin",
+  "author": {
+    "name": "HKRPT",
+    "contact": {
+      "web": "https://github.com/HKRPT/JLCEDA2KICAD"
+    }
+  },
+  "license": "MIT",
+  "resources": {
+    "homepage": "https://github.com/HKRPT/JLCEDA2KICAD"
+  },
+  "versions": [
+    {
+      "version": "0.1.0",
+      "status": "development",
+      "kicad_version": "9.0.1",
+      "platforms": ["windows"],
+      "runtime": "ipc"
+    }
+  ]
+}
+

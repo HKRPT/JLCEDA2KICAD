@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jlceda2kicad"
+dynamic = ["version"]
+description = "Unofficial personal KiCad importer for LCSC components"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+license = "MIT"
+authors = [{ name = "HKRPT" }]
+dependencies = [
+  "easyeda2kicad==1.0.1",
+  "kicad-python==0.7.1",
+  "PySide6==6.11.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy==1.19.1",
+  "pytest==9.0.2",
+  "pytest-cov==7.0.0",
+  "pytest-qt==4.5.0",
+  "ruff==0.14.10",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "jlceda2kicad.version.__version__"}
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers"
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = ["live: tests that access LCSC/EasyEDA over the network"]
+
+[tool.coverage.run]
+branch = true
+source = ["jlceda2kicad"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["jlceda2kicad"]
+exclude = ["build", "dist"]
+
