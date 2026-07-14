@@ -2,11 +2,12 @@
 
 import os
 import shutil
+import stat
 import uuid
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
-from .absolute_backup import AbsoluteBackupManager
+from .absolute_backup import AbsoluteBackupManager, _validate_target
 from .backup import BackupManager
 from .models import ImportReport
 
@@ -28,10 +29,66 @@ def _is_within(path: Path, root: Path) -> bool:
 def _is_allowed_target(
     path: Path, allowed_roots: tuple[Path, ...], allowed_files: tuple[Path, ...]
 ) -> bool:
-    resolved = path.resolve()
-    if any(resolved == item.resolve() for item in allowed_files):
+    if path in allowed_files:
         return True
-    return any(_is_within(resolved, root) for root in allowed_roots)
+    for root in allowed_roots:
+        try:
+            path.relative_to(root)
+            return True
+        except ValueError:
+            pass
+    return False
+
+
+def _cleanup_temporaries(paths: list[Path]) -> tuple[str, ...]:
+    errors: list[str] = []
+    for path in paths:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as error:
+            errors.append(f"Temporary cleanup failed for {path}: {error}")
+    return tuple(errors)
+
+
+def _ensure_parent_directories(parent: Path, created: list[Path]) -> None:
+    missing: list[Path] = []
+    current = parent
+    while True:
+        try:
+            status = current.lstat()
+        except FileNotFoundError:
+            missing.append(current)
+            if current.parent == current:
+                raise OSError(f"Cannot locate an existing parent for {parent}") from None
+            current = current.parent
+            continue
+        if not stat.S_ISDIR(status.st_mode):
+            raise NotADirectoryError(f"Target parent is not a directory: {current}")
+        break
+
+    for directory in reversed(missing):
+        try:
+            directory.mkdir()
+        except FileExistsError:
+            if not directory.is_dir():
+                raise NotADirectoryError(
+                    f"Target parent is not a directory: {directory}"
+                ) from None
+        else:
+            created.append(directory)
+
+
+def _cleanup_directories(paths: list[Path]) -> tuple[str, ...]:
+    errors: list[str] = []
+    deepest_first = sorted(
+        dict.fromkeys(paths), key=lambda path: len(path.parts), reverse=True
+    )
+    for path in deepest_first:
+        try:
+            path.rmdir()
+        except OSError as error:
+            errors.append(f"Parent directory cleanup failed for {path}: {error}")
+    return tuple(errors)
 
 
 class AtomicImportTransaction:
@@ -106,21 +163,38 @@ class AtomicMultiRootTransaction:
         self.replace = replace
 
     def commit(self, staged_to_target: Mapping[Path, Path]) -> ImportReport:
-        if not staged_to_target:
+        items = tuple(staged_to_target.items())
+        if not items:
             raise ImportTransactionError("No files to commit.")
-        for staged, target in staged_to_target.items():
+        canonical_items: list[tuple[Path, Path]] = []
+        for staged, target in items:
             if not staged.is_file() or staged.stat().st_size == 0:
                 raise ImportTransactionError(f"Staged output is empty or missing: {staged}")
-            if not _is_allowed_target(target, self.allowed_roots, self.allowed_files):
-                raise ImportTransactionError(f"Target is not in an allowlisted path: {target}")
+            if not target.is_absolute():
+                raise ImportTransactionError(f"Target path must be absolute: {target}")
+            try:
+                _validate_target(target)
+            except OSError as error:
+                raise ImportTransactionError(str(error)) from error
+            canonical_target = target.resolve(strict=False)
+            if not _is_allowed_target(
+                canonical_target, self.allowed_roots, self.allowed_files
+            ):
+                raise ImportTransactionError(
+                    f"Target is not in an allowlisted path: {canonical_target}"
+                )
+            canonical_items.append((staged, canonical_target))
 
-        targets = tuple(staged_to_target.values())
+        targets = tuple(target for _, target in canonical_items)
         manifest = self.backup_manager.create(targets)
         committed: list[Path] = []
         temporaries: list[Path] = []
+        created_directories: list[Path] = []
+        operation_error: OSError | None = None
+        rollback_result: list[str] = []
         try:
-            for staged, target in staged_to_target.items():
-                target.parent.mkdir(parents=True, exist_ok=True)
+            for staged, target in canonical_items:
+                _ensure_parent_directories(target.parent, created_directories)
                 temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
                 temporaries.append(temporary)
                 with staged.open("rb") as source, temporary.open("wb") as destination:
@@ -130,22 +204,35 @@ class AtomicMultiRootTransaction:
                 self.replace(temporary, target)
                 committed.append(target)
         except OSError as error:
-            rollback_result = self.backup_manager.rollback(manifest)
+            operation_error = error
+            try:
+                rollback_result.extend(self.backup_manager.rollback(manifest))
+            except OSError as rollback_error:
+                rollback_result.append(f"Backup rollback failed: {rollback_error}")
+
+        cleanup_result = _cleanup_temporaries(temporaries)
+        if operation_error is not None:
+            rollback_result.extend(cleanup_result)
+            rollback_result.extend(_cleanup_directories(created_directories))
             report = ImportReport(
                 success=False,
                 committed_paths=tuple(committed),
                 backup_dir=manifest.backup_dir,
-                rollback_result=rollback_result,
+                rollback_result=tuple(rollback_result),
             )
-            raise ImportTransactionError(f"Global import commit failed: {error}", report) from error
-        finally:
-            for temporary in temporaries:
-                temporary.unlink(missing_ok=True)
+            raise ImportTransactionError(
+                f"Global import commit failed: {operation_error}", report
+            ) from operation_error
 
-        self.backup_manager.prune()
+        warnings = list(cleanup_result)
+        try:
+            self.backup_manager.prune()
+        except OSError as error:
+            warnings.append(f"Backup prune failed: {error}")
         return ImportReport(
             success=True,
             committed_paths=tuple(committed),
+            warnings=tuple(warnings),
             backup_dir=manifest.backup_dir,
         )
 

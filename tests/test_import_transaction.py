@@ -1,4 +1,6 @@
 import os
+import subprocess
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 
 import pytest
@@ -11,6 +13,24 @@ from jlceda2kicad.import_transaction import (
     ImportTransactionError,
     prepare_shadow_project,
 )
+
+
+def _make_directory_link_or_skip(link: Path, target: Path) -> None:
+    try:
+        link.symlink_to(target, target_is_directory=True)
+        return
+    except OSError as symlink_error:
+        if os.name != "nt":
+            pytest.skip(f"symlinks unavailable: {symlink_error}")
+    completed = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if completed.returncode != 0:
+        pytest.skip("directory links unavailable")
 
 
 def test_atomic_import_commits_only_selected_files(tmp_path: Path) -> None:
@@ -130,6 +150,8 @@ def test_multi_root_transaction_rolls_back_after_second_replace_failure(
 
     assert old.read_text(encoding="utf-8") == "old"
     assert not new.exists()
+    assert not footprints.exists()
+    assert not footprints.parent.exists()
     assert captured.value.report.rollback_result == ()
 
 
@@ -159,3 +181,294 @@ def test_multi_root_transaction_accepts_explicitly_allowlisted_file(tmp_path: Pa
 
     assert report.success
     assert target.read_text(encoding="utf-8") == "data"
+
+
+def test_multi_root_transaction_rejects_relative_target_before_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    staged = tmp_path / "staged"
+    staged.write_text("data", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    transaction = AtomicMultiRootTransaction(
+        AbsoluteBackupManager(tmp_path / "backups"),
+        allowed_roots=(tmp_path / "allowed",),
+    )
+
+    with pytest.raises(ImportTransactionError, match="absolute"):
+        transaction.commit({staged: Path("allowed") / "file"})
+
+    assert not (tmp_path / "backups").exists()
+
+
+def test_multi_root_transaction_freezes_mapping_and_uses_canonical_target(
+    tmp_path: Path,
+) -> None:
+    staged = tmp_path / "staged"
+    staged.write_text("data", encoding="utf-8")
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    original_target = allowed / "unused" / ".." / "file"
+    canonical_target = allowed / "file"
+    outside_target = tmp_path / "outside" / "file"
+
+    class ChangingTargets(Mapping[Path, Path]):
+        def __init__(self) -> None:
+            self.items_calls = 0
+
+        def __getitem__(self, key: Path) -> Path:
+            assert key == staged
+            return outside_target
+
+        def __iter__(self) -> Iterator[Path]:
+            return iter((staged,))
+
+        def __len__(self) -> int:
+            return 1
+
+        def items(self) -> tuple[tuple[Path, Path], ...]:
+            self.items_calls += 1
+            target = original_target if self.items_calls == 1 else outside_target
+            return ((staged, target),)
+
+    targets = ChangingTargets()
+    transaction = AtomicMultiRootTransaction(
+        AbsoluteBackupManager(tmp_path / "backups"),
+        allowed_roots=(allowed,),
+    )
+
+    report = transaction.commit(targets)
+
+    assert targets.items_calls == 1
+    assert report.committed_paths == (canonical_target,)
+    assert canonical_target.read_text(encoding="utf-8") == "data"
+    assert not outside_target.exists()
+    assert not (allowed / "unused").exists()
+
+
+def test_multi_root_transaction_rejects_existing_directory_before_backup(
+    tmp_path: Path,
+) -> None:
+    staged = tmp_path / "staged"
+    staged.write_text("data", encoding="utf-8")
+    target = tmp_path / "allowed" / "target"
+    target.mkdir(parents=True)
+    transaction = AtomicMultiRootTransaction(
+        AbsoluteBackupManager(tmp_path / "backups"),
+        allowed_roots=(target.parent,),
+    )
+
+    with pytest.raises(ImportTransactionError, match="regular file"):
+        transaction.commit({staged: target})
+
+    assert not (tmp_path / "backups").exists()
+
+
+def test_multi_root_transaction_rejects_final_symlink_before_backup(
+    tmp_path: Path,
+) -> None:
+    staged = tmp_path / "staged"
+    staged.write_text("data", encoding="utf-8")
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    actual = allowed / "actual"
+    actual.mkdir()
+    (actual / "original").write_text("original", encoding="utf-8")
+    target = allowed / "target"
+    _make_directory_link_or_skip(target, actual)
+    transaction = AtomicMultiRootTransaction(
+        AbsoluteBackupManager(tmp_path / "backups"),
+        allowed_roots=(allowed,),
+    )
+
+    with pytest.raises(ImportTransactionError, match=r"link|reparse"):
+        transaction.commit({staged: target})
+
+    target.lstat()
+    assert (actual / "original").read_text(encoding="utf-8") == "original"
+    assert not (tmp_path / "backups").exists()
+
+
+def test_multi_root_transaction_rejects_broken_final_symlink_before_backup(
+    tmp_path: Path,
+) -> None:
+    staged = tmp_path / "staged"
+    staged.write_text("data", encoding="utf-8")
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    missing = allowed / "missing"
+    missing.mkdir()
+    target = allowed / "target"
+    _make_directory_link_or_skip(target, missing)
+    missing.rmdir()
+    transaction = AtomicMultiRootTransaction(
+        AbsoluteBackupManager(tmp_path / "backups"),
+        allowed_roots=(allowed,),
+    )
+
+    with pytest.raises(ImportTransactionError, match=r"link|reparse"):
+        transaction.commit({staged: target})
+
+    target.lstat()
+    assert not (tmp_path / "backups").exists()
+
+
+def test_multi_root_transaction_preserves_main_error_when_temp_cleanup_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "allowed" / "target"
+    target.parent.mkdir()
+    target.write_text("old", encoding="utf-8")
+    staged = tmp_path / "staged"
+    staged.write_text("new", encoding="utf-8")
+    original_unlink = Path.unlink
+
+    def fail_transaction_temp_cleanup(path: Path, missing_ok: bool = False) -> None:
+        if path.parent == target.parent and path.name.endswith(".tmp"):
+            raise PermissionError("temp cleanup locked")
+        original_unlink(path, missing_ok=missing_ok)
+
+    def fail_replace(source: Path, destination: Path) -> None:
+        raise PermissionError(f"commit locked: {source} -> {destination}")
+
+    monkeypatch.setattr(Path, "unlink", fail_transaction_temp_cleanup)
+    transaction = AtomicMultiRootTransaction(
+        AbsoluteBackupManager(tmp_path / "backups"),
+        allowed_roots=(target.parent,),
+        replace=fail_replace,
+    )
+
+    with pytest.raises(ImportTransactionError, match="Global import commit failed") as captured:
+        transaction.commit({staged: target})
+
+    assert target.read_text(encoding="utf-8") == "old"
+    assert any("temp cleanup locked" in error for error in captured.value.report.rollback_result)
+
+
+def test_multi_root_transaction_preserves_main_error_when_rollback_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "allowed" / "target"
+    target.parent.mkdir()
+    target.write_text("old", encoding="utf-8")
+    staged = tmp_path / "staged"
+    staged.write_text("new", encoding="utf-8")
+    manager = AbsoluteBackupManager(tmp_path / "backups")
+
+    def fail_replace(source: Path, destination: Path) -> None:
+        raise PermissionError(f"commit locked: {source} -> {destination}")
+
+    def fail_rollback(manifest: object) -> tuple[str, ...]:
+        raise PermissionError("rollback unavailable")
+
+    monkeypatch.setattr(manager, "rollback", fail_rollback)
+    transaction = AtomicMultiRootTransaction(
+        manager,
+        allowed_roots=(target.parent,),
+        replace=fail_replace,
+    )
+
+    with pytest.raises(ImportTransactionError, match="Global import commit failed") as captured:
+        transaction.commit({staged: target})
+
+    assert any("rollback unavailable" in error for error in captured.value.report.rollback_result)
+
+
+def test_multi_root_transaction_reports_success_cleanup_failure_as_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "allowed" / "target"
+    staged = tmp_path / "staged"
+    staged.write_text("new", encoding="utf-8")
+    original_unlink = Path.unlink
+
+    def fail_transaction_temp_cleanup(path: Path, missing_ok: bool = False) -> None:
+        if path.parent == target.parent and path.name.endswith(".tmp"):
+            raise PermissionError("temp cleanup locked")
+        original_unlink(path, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", fail_transaction_temp_cleanup)
+    transaction = AtomicMultiRootTransaction(
+        AbsoluteBackupManager(tmp_path / "backups"),
+        allowed_roots=(target.parent,),
+    )
+
+    report = transaction.commit({staged: target})
+
+    assert report.success
+    assert any("temp cleanup locked" in warning for warning in report.warnings)
+    assert target.read_text(encoding="utf-8") == "new"
+
+
+def test_multi_root_transaction_reports_prune_failure_as_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "allowed" / "target"
+    staged = tmp_path / "staged"
+    staged.write_text("new", encoding="utf-8")
+    manager = AbsoluteBackupManager(tmp_path / "backups")
+
+    def fail_prune() -> tuple[Path, ...]:
+        raise PermissionError("prune locked")
+
+    monkeypatch.setattr(manager, "prune", fail_prune)
+    transaction = AtomicMultiRootTransaction(
+        manager,
+        allowed_roots=(target.parent,),
+    )
+
+    report = transaction.commit({staged: target})
+
+    assert report.success
+    assert any("prune locked" in warning for warning in report.warnings)
+    assert target.read_text(encoding="utf-8") == "new"
+
+
+def test_multi_root_transaction_removes_new_parent_directories_after_failure(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "allowed" / "nested" / "target"
+    staged = tmp_path / "staged"
+    staged.write_text("new", encoding="utf-8")
+
+    def fail_replace(source: Path, destination: Path) -> None:
+        raise PermissionError(f"commit locked: {source} -> {destination}")
+
+    transaction = AtomicMultiRootTransaction(
+        AbsoluteBackupManager(tmp_path / "backups"),
+        allowed_roots=(tmp_path / "allowed",),
+        replace=fail_replace,
+    )
+
+    with pytest.raises(ImportTransactionError) as captured:
+        transaction.commit({staged: target})
+
+    assert captured.value.report.rollback_result == ()
+    assert not target.parent.exists()
+    assert not (tmp_path / "allowed").exists()
+
+
+def test_multi_root_transaction_reports_new_parent_directory_cleanup_failure(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "allowed" / "nested" / "target"
+    staged = tmp_path / "staged"
+    staged.write_text("new", encoding="utf-8")
+    blocker = target.parent / "unrelated"
+
+    def fail_replace(source: Path, destination: Path) -> None:
+        blocker.write_text("keep", encoding="utf-8")
+        raise PermissionError(f"commit locked: {source} -> {destination}")
+
+    transaction = AtomicMultiRootTransaction(
+        AbsoluteBackupManager(tmp_path / "backups"),
+        allowed_roots=(tmp_path / "allowed",),
+        replace=fail_replace,
+    )
+
+    with pytest.raises(ImportTransactionError) as captured:
+        transaction.commit({staged: target})
+
+    assert blocker.read_text(encoding="utf-8") == "keep"
+    assert any(
+        "directory cleanup" in error for error in captured.value.report.rollback_result
+    )
