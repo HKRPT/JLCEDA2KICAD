@@ -35,6 +35,15 @@ from .models import ImportReport, ImportScope, ImportTarget, LibraryKind, Librar
 from .settings import AppSettings
 
 
+def _library_identity(reference: LibraryRef) -> tuple[LibraryKind, str, Path, Path]:
+    return (
+        reference.kind,
+        reference.nickname,
+        reference.path,
+        reference.table_path,
+    )
+
+
 class LibraryTargetWidget(QGroupBox):
     """Collect the project/global destination and generated component names."""
 
@@ -110,20 +119,42 @@ class LibraryTargetWidget(QGroupBox):
             if reference.kind is LibraryKind.SYMBOL
             else self.footprint_library
         )
+        identity = _library_identity(reference)
+        for index in range(combo.count()):
+            existing = combo.itemData(index)
+            if isinstance(existing, LibraryRef) and _library_identity(existing) == identity:
+                combo.setCurrentIndex(index)
+                return
         combo.addItem(f"{reference.nickname}（待创建） — {reference.path}", reference)
         combo.setCurrentIndex(combo.count() - 1)
 
     def _scope_changed(self) -> None:
         self.global_fields.setVisible(
-            ImportScope(self.scope.currentData()) is ImportScope.GLOBAL
+            self.scope.currentData() == ImportScope.GLOBAL.value
         )
 
     def refresh(self) -> None:
         """Reload writable libraries while retaining unregistered selections."""
+        symbol_pending, current_symbol = self._combo_state(self.symbol_library)
+        footprint_pending, current_footprint = self._combo_state(
+            self.footprint_library
+        )
         if not self.kicad_version and self.config_root is None:
             self.catalog_error = ""
-            self.symbol_library.clear()
-            self.footprint_library.clear()
+            self._populate(
+                self.symbol_library,
+                (),
+                self.settings.last_symbol_library,
+                pending=symbol_pending,
+                current=current_symbol,
+            )
+            self._populate(
+                self.footprint_library,
+                (),
+                self.settings.last_footprint_library,
+                pending=footprint_pending,
+                current=current_footprint,
+            )
             self._update_model_path()
             return
         try:
@@ -133,8 +164,20 @@ class LibraryTargetWidget(QGroupBox):
             )
         except GlobalLibraryError as error:
             self.catalog_error = str(error)
-            self.symbol_library.clear()
-            self.footprint_library.clear()
+            self._populate(
+                self.symbol_library,
+                (),
+                self.settings.last_symbol_library,
+                pending=symbol_pending,
+                current=current_symbol,
+            )
+            self._populate(
+                self.footprint_library,
+                (),
+                self.settings.last_footprint_library,
+                pending=footprint_pending,
+                current=current_footprint,
+            )
             self._update_model_path()
             return
         self.catalog_error = ""
@@ -142,40 +185,71 @@ class LibraryTargetWidget(QGroupBox):
             self.symbol_library,
             catalog.symbols,
             self.settings.last_symbol_library,
+            pending=symbol_pending,
+            current=current_symbol,
         )
         self._populate(
             self.footprint_library,
             catalog.footprints,
             self.settings.last_footprint_library,
+            pending=footprint_pending,
+            current=current_footprint,
         )
         self._update_model_path()
+
+    def _combo_state(
+        self, combo: QComboBox
+    ) -> tuple[tuple[LibraryRef, ...], LibraryRef | None]:
+        pending = tuple(
+            reference
+            for index in range(combo.count())
+            if isinstance((reference := combo.itemData(index)), LibraryRef)
+            and not reference.registered
+        )
+        current = combo.currentData()
+        return pending, current if isinstance(current, LibraryRef) else None
 
     def _populate(
         self,
         combo: QComboBox,
         references: tuple[LibraryRef, ...],
         preferred: str,
+        *,
+        pending: tuple[LibraryRef, ...],
+        current: LibraryRef | None,
     ) -> None:
-        pending = tuple(
-            combo.itemData(index)
-            for index in range(combo.count())
-            if isinstance(combo.itemData(index), LibraryRef)
-            and not combo.itemData(index).registered
-        )
         combo.clear()
+        merged: list[LibraryRef] = []
+        identities: set[tuple[LibraryKind, str, Path, Path]] = set()
         for reference in (*references, *pending):
+            identity = _library_identity(reference)
+            if identity in identities:
+                continue
+            identities.add(identity)
+            merged.append(reference)
+        for reference in merged:
             suffix = "（待创建）" if not reference.registered else ""
             combo.addItem(f"{reference.nickname}{suffix} — {reference.path}", reference)
-        preferred_index = next(
-            (
-                index
-                for index in range(combo.count())
-                if isinstance(combo.itemData(index), LibraryRef)
-                and combo.itemData(index).nickname == preferred
-            ),
-            -1,
-        )
-        combo.setCurrentIndex(preferred_index)
+        if current is not None:
+            selected_identity = _library_identity(current)
+            selected_index = next(
+                (
+                    index
+                    for index, reference in enumerate(merged)
+                    if _library_identity(reference) == selected_identity
+                ),
+                -1,
+            )
+        else:
+            selected_index = next(
+                (
+                    index
+                    for index, reference in enumerate(merged)
+                    if reference.nickname == preferred
+                ),
+                -1,
+            )
+        combo.setCurrentIndex(selected_index)
 
     def _update_model_path(self) -> None:
         reference = self.footprint_library.currentData()
@@ -199,7 +273,10 @@ class LibraryTargetWidget(QGroupBox):
         import_models: bool = True,
     ) -> ImportTarget:
         """Validate only enabled artifact targets and return an immutable request."""
-        scope = ImportScope(self.scope.currentData())
+        try:
+            scope = ImportScope(self.scope.currentData())
+        except (TypeError, ValueError) as error:
+            raise ValueError("Invalid import scope selection") from error
         if scope is ImportScope.PROJECT:
             return ImportTarget()
         symbol = self.symbol_library.currentData()
@@ -210,8 +287,15 @@ class LibraryTargetWidget(QGroupBox):
             raise ValueError("请选择全局封装库")
         return ImportTarget(
             scope=scope,
-            symbol_library=symbol if isinstance(symbol, LibraryRef) else None,
-            footprint_library=footprint if isinstance(footprint, LibraryRef) else None,
+            symbol_library=(
+                symbol if import_symbol and isinstance(symbol, LibraryRef) else None
+            ),
+            footprint_library=(
+                footprint
+                if (import_footprint or import_models)
+                and isinstance(footprint, LibraryRef)
+                else None
+            ),
             symbol_name=(
                 validate_component_name(self.symbol_name.text(), "symbol")
                 if import_symbol
@@ -251,7 +335,14 @@ class LibraryTargetWidget(QGroupBox):
 
     def _create_library(self, kind: LibraryKind) -> None:
         if self.config_root is None:
-            self.config_root = config_root_for_version(self.kicad_version)
+            try:
+                self.config_root = config_root_for_version(self.kicad_version)
+            except GlobalLibraryError as error:
+                self.catalog_error = str(error)
+                self.new_symbol_button.setEnabled(False)
+                self.new_footprint_button.setEnabled(False)
+                QMessageBox.warning(self, "无法确定 KiCad 配置目录", self.catalog_error)
+                return
         dialog = NewLibraryDialog(kind, self.config_root, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.add_pending_library(dialog.library_ref())
@@ -316,10 +407,12 @@ class NewLibraryDialog(QDialog):
         if self.kind is LibraryKind.SYMBOL:
             if path.suffix.casefold() != ".kicad_sym":
                 raise ValueError("符号库路径必须以 .kicad_sym 结尾")
+            path = path.with_suffix(".kicad_sym")
             table = self.config_root / "sym-lib-table"
         else:
             if path.suffix.casefold() != ".pretty":
                 raise ValueError("封装库路径必须以 .pretty 结尾")
+            path = path.with_suffix(".pretty")
             table = self.config_root / "fp-lib-table"
         return pending_library(self.kind, nickname, path, table)
 
@@ -356,13 +449,18 @@ class ImportResultDialog(QDialog):
             ("封装关联", report.footprint_association),
             ("备份", report.backup_dir),
         ):
-            if value is not None:
-                lines.append(f"{label}：{value}")
-        if report.library_registration:
-            lines.append("新注册：" + "、".join(report.library_registration))
+            if value is None or (isinstance(value, str) and not value.strip()):
+                continue
+            lines.append(f"{label}：{value}")
+        registrations = tuple(
+            item for item in report.library_registration if item.strip()
+        )
+        if registrations:
+            lines.append("新注册：" + "、".join(registrations))
             lines.append("新注册的库若未立即出现，请重启相应的 KiCad 编辑器。")
-        if report.warnings:
-            lines.append("警告：\n" + "\n".join(report.warnings))
+        warnings = tuple(item for item in report.warnings if item.strip())
+        if warnings:
+            lines.append("警告：\n" + "\n".join(warnings))
 
         text = QPlainTextEdit("\n\n".join(lines))
         text.setReadOnly(True)
@@ -385,7 +483,13 @@ class ImportResultDialog(QDialog):
         QApplication.clipboard().setText("\n".join(str(path) for path in self.paths))
 
     def _open_primary_directory(self) -> None:
-        path = self.report.footprint_destination or self.report.symbol_destination
-        if path is not None:
-            directory = path if path.is_dir() else path.parent
+        destination = (
+            self.report.footprint_destination or self.report.symbol_destination
+        )
+        directory: Path | None
+        if destination is not None:
+            directory = destination if destination.is_dir() else destination.parent
+        else:
+            directory = self.report.model_directory or self.report.backup_dir
+        if directory is not None:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(directory)))
