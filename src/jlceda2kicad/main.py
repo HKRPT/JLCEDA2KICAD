@@ -54,6 +54,7 @@ def create_window(
         settings_store=settings_store,
         history_store=history_store,
         temp_manager=TemporaryWorkspaceManager(settings.cache_dir or root / "temp"),
+        global_backup_root=root / "backups" / "global",
     )
 
 

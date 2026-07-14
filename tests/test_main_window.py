@@ -5,7 +5,13 @@ from PySide6.QtCore import QObject, Signal
 
 from jlceda2kicad.history import HistoryStore
 from jlceda2kicad.main_window import MainWindow
-from jlceda2kicad.models import ProjectContext
+from jlceda2kicad.models import (
+    ArtifactSet,
+    ImportOptions,
+    ImportReport,
+    ImportScope,
+    ProjectContext,
+)
 from jlceda2kicad.process_controller import ProcessResult
 from jlceda2kicad.settings import SettingsStore
 from jlceda2kicad.temp_manager import TemporaryWorkspaceManager
@@ -37,7 +43,9 @@ class FakeProcessController(QObject):
         self.cancelled = True
 
 
-def _window(tmp_path: Path) -> tuple[MainWindow, FakeProcessController]:
+def _window(
+    tmp_path: Path, *, global_config_root: Path | None = None
+) -> tuple[MainWindow, FakeProcessController]:
     project = tmp_path / "工程"
     project.mkdir()
     project_file = project / "demo.kicad_pro"
@@ -50,9 +58,59 @@ def _window(tmp_path: Path) -> tuple[MainWindow, FakeProcessController]:
         settings_store=SettingsStore(tmp_path / "settings.json"),
         history_store=HistoryStore(tmp_path / "history.json"),
         temp_manager=TemporaryWorkspaceManager(tmp_path / "temp"),
+        global_backup_root=tmp_path / "backups" / "global",
+        global_config_root=global_config_root or tmp_path / "kicad-config",
         process_controller=controller,
     )
     return window, controller
+
+
+def _global_tables(config: Path, root: Path) -> None:
+    config.mkdir(parents=True)
+    symbol = root / "symbols" / "Harulib.kicad_sym"
+    footprint = root / "footprints" / "Harulib.pretty"
+    symbol.parent.mkdir(parents=True)
+    footprint.mkdir(parents=True)
+    symbol.write_text("(kicad_symbol_lib (version 20231120))", encoding="utf-8")
+    (config / "sym-lib-table").write_text(
+        f'(sym_lib_table (version 7) (lib (name "Harulib") (type "KiCad") '
+        f'(uri "{symbol.as_posix()}")))',
+        encoding="utf-8",
+    )
+    (config / "fp-lib-table").write_text(
+        f'(fp_lib_table (version 7) (lib (name "Harulib") (type "KiCad") '
+        f'(uri "{footprint.as_posix()}")))',
+        encoding="utf-8",
+    )
+
+
+def _window_with_global_tables(
+    tmp_path: Path,
+) -> tuple[MainWindow, FakeProcessController]:
+    config = tmp_path / "kicad-config"
+    _global_tables(config, tmp_path / "global-libraries")
+    window, controller = _window(tmp_path, global_config_root=config)
+    window.library_target.symbol_library.setCurrentIndex(0)
+    window.library_target.footprint_library.setCurrentIndex(0)
+    return window, controller
+
+
+def _preview_artifacts(root: Path) -> ArtifactSet:
+    root.mkdir(parents=True)
+    symbol = root / "preview.kicad_sym"
+    symbol.write_text(
+        '(kicad_symbol_lib (version 20231120) (symbol "Part" '
+        '(property "Value" "Part") (property "Footprint" "Old:Foot") '
+        '(property "LCSC Part" "C2040")))',
+        encoding="utf-8",
+    )
+    footprint = root / "Foot.kicad_mod"
+    footprint.write_text('(footprint "Foot")', encoding="utf-8")
+    return ArtifactSet(
+        root=root,
+        symbol_libraries=(symbol,),
+        footprints=(footprint,),
+    )
 
 
 def test_main_window_has_chinese_workflow_and_four_preview_tabs(
@@ -139,3 +197,113 @@ def test_cancel_button_delegates_to_running_process(qtbot: object, tmp_path: Pat
     window.cancel_button.click()
 
     assert controller.cancelled
+
+
+def test_preview_populates_editable_generated_names(qtbot: object, tmp_path: Path) -> None:
+    window, controller = _window(tmp_path)
+    qtbot.addWidget(window)  # type: ignore[attr-defined]
+    window.lcsc_input.setText("C2040")
+    window.preview_button.click()
+    command = controller.commands[0]
+    output_base = Path(command.arguments[command.arguments.index("--output") + 1])  # type: ignore[attr-defined]
+    output_base.with_suffix(".kicad_sym").write_text(
+        '(kicad_symbol_lib (version 20231120) (symbol "Part" '
+        '(property "Value" "Part") (property "Footprint" "Old:Foot") '
+        '(property "LCSC Part" "C2040")))',
+        encoding="utf-8",
+    )
+    pretty = output_base.with_suffix(".pretty")
+    pretty.mkdir()
+    (pretty / "Foot.kicad_mod").write_text('(footprint "Foot")', encoding="utf-8")
+    controller.completed.emit(ProcessResult(0, True, "", ""))
+    controller.completed.emit(ProcessResult(0, True, "", ""))
+
+    assert window.library_target.symbol_name.text() == "Part"
+    assert window.library_target.footprint_name.text() == "Foot"
+
+
+def test_global_import_builds_formal_commands_without_seeding_project_library(
+    qtbot: object, tmp_path: Path
+) -> None:
+    window, controller = _window_with_global_tables(tmp_path)
+    qtbot.addWidget(window)  # type: ignore[attr-defined]
+    window.artifacts = _preview_artifacts(tmp_path / "preview")
+    window.lcsc_input.setText("C2040")
+    window.library_target.scope.setCurrentIndex(1)
+    window.library_target.set_generated_names("CustomSymbol", "CustomFootprint")
+
+    window.start_import()
+
+    assert len(controller.commands) == 1
+    assert window._import_options is not None
+    assert window._import_options.target.scope is ImportScope.GLOBAL
+    assert window._shadow is not None
+    assert not (window._shadow / "libs" / "lcsc_project.kicad_sym").exists()
+
+
+def test_manual_project_selection_keeps_running_kicad_version(
+    qtbot: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from PySide6.QtWidgets import QFileDialog
+
+    window, _ = _window(tmp_path)
+    qtbot.addWidget(window)  # type: ignore[attr-defined]
+    other = tmp_path / "other"
+    other.mkdir()
+    project = other / "other.kicad_pro"
+    project.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(project), "")),
+    )
+
+    window._choose_project()
+
+    assert window.context.project_root == other
+    assert window.context.kicad_version == "10.0.4"
+
+
+def test_finish_global_import_routes_backup_report_history_and_settings(
+    qtbot: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    window, _ = _window_with_global_tables(tmp_path)
+    qtbot.addWidget(window)  # type: ignore[attr-defined]
+    window.artifacts = _preview_artifacts(tmp_path / "preview")
+    window.lcsc_input.setText("C2040")
+    window.library_target.scope.setCurrentIndex(1)
+    window.library_target.symbol_library.setCurrentIndex(0)
+    window.library_target.footprint_library.setCurrentIndex(0)
+    window.library_target.set_generated_names("CustomSymbol", "CustomFootprint")
+    target = window.library_target.build_target()
+    window._import_options = ImportOptions(target=target)
+    window._shadow = tmp_path / "shadow"
+    window._shadow.mkdir()
+    window._phase = "import"
+    captured: dict[str, object] = {}
+    report = ImportReport(
+        success=True,
+        symbol_destination=tmp_path / "Harulib.kicad_sym",
+        footprint_destination=tmp_path / "Harulib.pretty" / "CustomFootprint.kicad_mod",
+        footprint_association="Harulib:CustomFootprint",
+    )
+
+    def fake_import(*args: object, **kwargs: object) -> ImportReport:
+        captured["backup"] = kwargs["global_backup_root"]
+        return report
+
+    def fake_dialog_exec(dialog: object) -> int:
+        captured["report"] = dialog.report  # type: ignore[attr-defined]
+        return 0
+
+    monkeypatch.setattr("jlceda2kicad.main_window.import_shadow_artifacts", fake_import)
+    monkeypatch.setattr("jlceda2kicad.main_window.ImportResultDialog.exec", fake_dialog_exec)
+
+    window._finish_import()
+
+    assert captured["backup"] == window.global_backup_root
+    assert captured["report"] == report
+    assert window.settings_store.load().last_symbol_library == "Harulib"
+    history = window.history_store.load()
+    assert history[0].symbol == "CustomSymbol"
+    assert history[0].footprint == "CustomFootprint"

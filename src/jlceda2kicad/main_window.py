@@ -34,21 +34,24 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .conflicts import ComponentConflictError, merge_symbol_library
+from .artifact_rewrite import generated_names
 from .easyeda_cli import CommandSpec, build_command
 from .history import HistoryEntry, HistoryStore
 from .import_service import (
     ImportServiceError,
     build_formal_requests,
+    find_import_conflicts,
     import_shadow_artifacts,
 )
 from .import_transaction import prepare_shadow_project
+from .library_target_widget import ImportResultDialog, LibraryTargetWidget
 from .models import (
     ArtifactSet,
     ConflictPolicy,
     ConversionMode,
     ConversionRequest,
     ImportOptions,
+    ImportScope,
     ProjectContext,
 )
 from .output_discovery import discover_artifacts
@@ -121,6 +124,8 @@ class MainWindow(QMainWindow):
         settings_store: SettingsStore,
         history_store: HistoryStore,
         temp_manager: TemporaryWorkspaceManager,
+        global_backup_root: Path,
+        global_config_root: Path | None = None,
         process_controller: Any | None = None,
     ) -> None:
         super().__init__()
@@ -130,6 +135,8 @@ class MainWindow(QMainWindow):
         self.settings_store = settings_store
         self.history_store = history_store
         self.temp_manager = temp_manager
+        self.global_backup_root = global_backup_root
+        self.global_config_root = global_config_root
         self.controller = process_controller or ProcessController(self)
         self.settings = self.settings_store.load()
         self.artifacts: ArtifactSet | None = None
@@ -140,6 +147,8 @@ class MainWindow(QMainWindow):
         self._failures: list[str] = []
         self._import_options: ImportOptions | None = None
         self._build_ui()
+        if self.library_target.catalog_error:
+            self._append_log(f"无法读取全局库表：{self.library_target.catalog_error}")
         self._set_context(context)
         self.controller.output.connect(self._append_log)
         self.controller.completed.connect(self._process_completed)
@@ -185,6 +194,13 @@ class MainWindow(QMainWindow):
         query_layout.addWidget(self.component_name, 1, 1)
         query_layout.addWidget(self.component_files, 1, 2, 1, 2)
         outer.addWidget(query_group)
+
+        self.library_target = LibraryTargetWidget(
+            self.settings,
+            kicad_version=self.context.kicad_version or "",
+            config_root=self.global_config_root,
+        )
+        outer.addWidget(self.library_target)
 
         self.preview_tabs = QTabWidget()
         self.symbol_preview = SymbolPreviewWidget()
@@ -239,6 +255,11 @@ class MainWindow(QMainWindow):
 
     def _set_context(self, context: ProjectContext) -> None:
         self.context = context
+        if context.kicad_version:
+            self.library_target.kicad_version = context.kicad_version
+        self.library_target.refresh()
+        if self.library_target.catalog_error:
+            self._append_log(f"无法读取全局库表：{self.library_target.catalog_error}")
         self.project_path.setText(str(context.project_root) if context.project_root else "")
         source = {"ipc": "IPC 自动识别", "manual": "手动选择", "none": "未识别"}
         version = f" · KiCad {context.kicad_version}" if context.kicad_version else ""
@@ -258,7 +279,10 @@ class MainWindow(QMainWindow):
             selected = QFileDialog.getExistingDirectory(self, "选择 KiCad 工程目录", start)
         if not selected:
             return
+        detected_version = self.context.kicad_version
         context = context_from_path(Path(selected))
+        if context.kicad_version is None and detected_version is not None:
+            context = replace(context, kicad_version=detected_version)
         if not context.is_valid:
             self.status_label.setText("所选位置不包含 KiCad 工程。")
             return
@@ -307,10 +331,17 @@ class MainWindow(QMainWindow):
         if self.artifacts is None:
             self.status_label.setText("请先查询并预览元件。")
             return
-        policy = self._choose_conflict_policy()
-        if policy is None:
-            self.status_label.setText("已取消导入。")
+        try:
+            target = self.library_target.build_target(
+                import_symbol=self.settings.import_symbol,
+                import_footprint=self.settings.import_footprint,
+                import_models=self.settings.import_step or self.settings.import_wrl,
+            )
+        except ValueError as error:
+            self.status_label.setText(f"导入目标无效：{error}")
             return
+        self.settings = self.library_target.apply_settings(self.settings, target)
+        self.settings_store.save(self.settings)
         options = ImportOptions(
             symbol=self.settings.import_symbol,
             footprint=self.settings.import_footprint,
@@ -318,11 +349,19 @@ class MainWindow(QMainWindow):
             wrl=self.settings.import_wrl,
             use_cache=self.settings.use_cache,
             open_library_dir=self.settings.open_library_dir,
-            conflict_policy=policy,
+            target=target,
         )
+        policy = self._choose_conflict_policy(options)
+        if policy is None:
+            self.status_label.setText("已取消导入。")
+            return
+        options = replace(options, conflict_policy=policy)
         self._import_options = options
         self._shadow = self.temp_manager.create(f"import-{self.lcsc_input.text()}")
-        prepare_shadow_project(self.context.project_root, self._shadow)
+        if target.scope is ImportScope.PROJECT:
+            prepare_shadow_project(self.context.project_root, self._shadow)
+        else:
+            (self._shadow / "libs").mkdir(parents=True, exist_ok=True)
         requests = build_formal_requests(self.lcsc_input.text(), self._shadow, options)
         if not requests:
             self.status_label.setText("设置中没有选择任何导入产物。")
@@ -333,8 +372,8 @@ class MainWindow(QMainWindow):
         self._set_busy(True, "正在影子工程中正式转换…")
         self._run_next()
 
-    def _choose_conflict_policy(self) -> ConflictPolicy | None:
-        conflicts = self._find_conflicts()
+    def _choose_conflict_policy(self, options: ImportOptions) -> ConflictPolicy | None:
+        conflicts = self._find_conflicts(options)
         if not conflicts:
             return ConflictPolicy.CANCEL
         box = QMessageBox(self)
@@ -354,32 +393,17 @@ class MainWindow(QMainWindow):
             return None
         return None
 
-    def _find_conflicts(self) -> list[str]:
+    def _find_conflicts(self, options: ImportOptions) -> list[str]:
         if self.artifacts is None or self.context.project_root is None:
             return []
-        root = self.context.project_root
-        conflicts: list[str] = []
-        symbol_target = root / "libs" / "lcsc_project.kicad_sym"
-        if self.artifacts.symbol_libraries and symbol_target.is_file():
-            try:
-                merge_symbol_library(
-                    symbol_target.read_text(encoding="utf-8-sig"),
-                    self.artifacts.symbol_libraries[0].read_text(encoding="utf-8-sig"),
-                    self.lcsc_input.text(),
-                    ConflictPolicy.CANCEL,
-                )
-            except ComponentConflictError as error:
-                conflicts.append(str(error))
-            except (OSError, UnicodeError, ValueError):
-                conflicts.append("现有符号库无法安全检查")
-        for path, directory in (
-            *((path, "lcsc_project.pretty") for path in self.artifacts.footprints),
-            *((path, "lcsc_project.3dshapes") for path in self.artifacts.step_models),
-            *((path, "lcsc_project.3dshapes") for path in self.artifacts.wrl_models),
-        ):
-            if (root / "libs" / directory / path.name).exists():
-                conflicts.append(path.name)
-        return conflicts
+        return list(
+            find_import_conflicts(
+                self.context.project_root,
+                self.artifacts,
+                self.lcsc_input.text(),
+                options,
+            )
+        )
 
     def _run_next(self) -> None:
         if not self._queue:
@@ -458,6 +482,11 @@ class MainWindow(QMainWindow):
         self.component_files.setText(counts)
         for warning in artifacts.warnings:
             self._append_log(warning)
+        try:
+            symbol_name, footprint_name = generated_names(artifacts, self.lcsc_input.text())
+            self.library_target.set_generated_names(symbol_name, footprint_name)
+        except (OSError, UnicodeError, ValueError) as error:
+            self._append_log(f"无法读取转换名称：{error}")
 
     def _finish_import(self) -> None:
         if self._failures:
@@ -477,16 +506,31 @@ class MainWindow(QMainWindow):
                 self.artifacts,
                 self._import_options,
                 backup_count=self.settings.backup_count,
+                global_backup_root=self.global_backup_root,
             )
         except ImportServiceError as error:
+            details = [str(error)]
+            if error.report.backup_dir is not None:
+                details.append(f"备份：{error.report.backup_dir}")
+            if error.report.rollback_result:
+                details.append("回滚失败：\n" + "\n".join(error.report.rollback_result))
+            elif error.report.backup_dir is not None:
+                details.append("已完成回滚。")
+            message = "\n\n".join(details)
             self._phase = "idle"
             self._set_busy(False, f"导入失败：{error}")
-            QMessageBox.critical(self, "导入失败", str(error))
+            QMessageBox.critical(self, "导入失败", message)
             return
-        symbol_name = (
-            self.artifacts.symbol_libraries[0].name if self.artifacts.symbol_libraries else ""
+        self.settings = self.library_target.apply_settings(
+            self.settings, self._import_options.target
         )
-        footprint_name = self.artifacts.footprints[0].name if self.artifacts.footprints else ""
+        self.settings_store.save(self.settings)
+        symbol_name = self._import_options.target.symbol_name or (
+            report.symbol_destination.name if report.symbol_destination else ""
+        )
+        footprint_name = self._import_options.target.footprint_name or (
+            report.footprint_destination.name if report.footprint_destination else ""
+        )
         self.history_store.add(
             HistoryEntry(
                 lcsc_id=self.lcsc_input.text(),
@@ -497,14 +541,9 @@ class MainWindow(QMainWindow):
                 result="成功",
             )
         )
-        details = f"已提交 {len(report.committed_paths)} 个文件。"
-        if report.warnings:
-            details += "\n\n警告：\n" + "\n".join(report.warnings)
         self._phase = "idle"
         self._set_busy(False, "导入成功。")
-        QMessageBox.information(self, "导入完成", details)
-        if self._import_options.open_library_dir:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.context.project_root / "libs")))
+        ImportResultDialog(report, self).exec()
 
     def cancel_process(self) -> None:
         self.controller.cancel()
