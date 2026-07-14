@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from jlceda2kicad.absolute_backup import AbsoluteBackupManager
 from jlceda2kicad.import_service import (
     ImportServiceError,
     find_import_conflicts,
@@ -191,6 +192,70 @@ def test_global_footprint_conflict_policies(
         assert 'footprint "CustomFootprint"' in content
 
 
+def test_skip_existing_symbol_clears_unapplied_association_but_imports_footprint(
+    tmp_path: Path,
+) -> None:
+    shadow = tmp_path / "shadow"
+    artifacts = _write_shadow_artifacts(shadow)
+    target = _pending_target(tmp_path)
+    assert target.symbol_library is not None
+    assert target.footprint_library is not None
+    original_symbol = (
+        '(kicad_symbol_lib (version 20231120) '
+        '(symbol "CustomSymbol" (property "Footprint" "Old:Foot") '
+        '(property "LCSC Part" "C2040")))'
+    )
+    target.symbol_library.path.write_text(original_symbol, encoding="utf-8")
+
+    report = import_shadow_artifacts(
+        tmp_path / "project",
+        shadow,
+        "C2040",
+        artifacts,
+        ImportOptions(
+            step=False,
+            wrl=False,
+            conflict_policy=ConflictPolicy.SKIP_EXISTING,
+            target=target,
+        ),
+        global_backup_root=tmp_path / "backups",
+    )
+
+    destination = target.footprint_library.path / "CustomFootprint.kicad_mod"
+    assert destination.is_file()
+    assert target.symbol_library.path.read_text(encoding="utf-8") == original_symbol
+    assert report.footprint_association is None
+    assert any("关联未应用" in warning for warning in report.warnings)
+
+
+def test_symbol_only_preserves_converter_footprint_and_warns_unverified_association(
+    tmp_path: Path,
+) -> None:
+    shadow = tmp_path / "shadow"
+    artifacts = _write_shadow_artifacts(shadow)
+    target = _pending_target(tmp_path)
+    assert target.symbol_library is not None
+
+    report = import_shadow_artifacts(
+        tmp_path / "project",
+        shadow,
+        "C2040",
+        artifacts,
+        ImportOptions(
+            footprint=False,
+            step=False,
+            wrl=False,
+            target=target,
+        ),
+        global_backup_root=tmp_path / "backups",
+    )
+
+    symbol_text = target.symbol_library.path.read_text(encoding="utf-8")
+    assert 'property "Footprint" "easyeda2kicad:NewPart"' in symbol_text
+    assert report.footprint_association is None
+    assert any("关联未在所选全局目标中验证" in warning for warning in report.warnings)
+
+
 def test_pending_libraries_register_both_global_tables(tmp_path: Path) -> None:
     shadow = tmp_path / "shadow"
     artifacts = _write_shadow_artifacts(shadow)
@@ -229,6 +294,180 @@ def test_pending_libraries_register_both_global_tables(tmp_path: Path) -> None:
         "MySymbols (symbol)",
         "MyFootprints (footprint)",
     }
+
+
+@pytest.mark.parametrize("library_exists", [False, True])
+def test_models_only_rejects_pending_footprint_library_without_writes(
+    tmp_path: Path, library_exists: bool
+) -> None:
+    shadow = tmp_path / "shadow"
+    artifacts = _write_shadow_artifacts(shadow)
+    target = _pending_target(tmp_path)
+    assert target.footprint_library is not None
+    if library_exists:
+        target.footprint_library.path.mkdir()
+    before_table = target.footprint_library.table_path.read_text(encoding="utf-8")
+
+    with pytest.raises(ImportServiceError, match="registered footprint library"):
+        import_shadow_artifacts(
+            tmp_path / "project",
+            shadow,
+            "C2040",
+            artifacts,
+            ImportOptions(
+                symbol=False,
+                footprint=False,
+                step=True,
+                wrl=False,
+                target=target,
+            ),
+            global_backup_root=tmp_path / "backups",
+        )
+
+    assert target.model_dir is not None and not target.model_dir.exists()
+    assert target.footprint_library.path.exists() is library_exists
+    if library_exists:
+        assert not tuple(target.footprint_library.path.iterdir())
+    assert target.footprint_library.table_path.read_text(encoding="utf-8") == before_table
+    assert not (tmp_path / "backups").exists()
+
+
+@pytest.mark.parametrize("destination_state", ["missing", "wrong_type"])
+def test_models_only_rejects_invalid_registered_footprint_library_without_writes(
+    tmp_path: Path, destination_state: str
+) -> None:
+    shadow = tmp_path / "shadow"
+    artifacts = _write_shadow_artifacts(shadow)
+    footprint_library = tmp_path / "Footprints.pretty"
+    if destination_state == "wrong_type":
+        footprint_library.write_text("not a directory", encoding="utf-8")
+    table = tmp_path / "fp-lib-table"
+    table_text = (
+        '(fp_lib_table (version 7) (lib (name "Footprints") (type "KiCad") '
+        f'(uri "{footprint_library.as_posix()}")))'
+    )
+    table.write_text(table_text, encoding="utf-8")
+    target = ImportTarget(
+        scope=ImportScope.GLOBAL,
+        footprint_library=LibraryRef(
+            "Footprints",
+            LibraryKind.FOOTPRINT,
+            footprint_library,
+            table,
+            registered=True,
+        ),
+    )
+
+    with pytest.raises(ImportServiceError, match=r"Footprints\.pretty"):
+        import_shadow_artifacts(
+            tmp_path / "project",
+            shadow,
+            "C2040",
+            artifacts,
+            ImportOptions(
+                symbol=False,
+                footprint=False,
+                step=True,
+                wrl=False,
+                target=target,
+            ),
+            global_backup_root=tmp_path / "backups",
+        )
+
+    assert target.model_dir is not None and not target.model_dir.exists()
+    assert table.read_text(encoding="utf-8") == table_text
+    assert not (tmp_path / "backups").exists()
+    if destination_state == "wrong_type":
+        assert footprint_library.read_text(encoding="utf-8") == "not a directory"
+
+
+def test_models_only_accepts_existing_registered_footprint_library(tmp_path: Path) -> None:
+    shadow = tmp_path / "shadow"
+    artifacts = _write_shadow_artifacts(shadow)
+    footprint_library = tmp_path / "Footprints.pretty"
+    footprint_library.mkdir()
+    table = tmp_path / "fp-lib-table"
+    table_text = (
+        '(fp_lib_table (version 7) (lib (name "Footprints") (type "KiCad") '
+        f'(uri "{footprint_library.as_posix()}")))'
+    )
+    table.write_text(table_text, encoding="utf-8")
+    target = ImportTarget(
+        scope=ImportScope.GLOBAL,
+        footprint_library=LibraryRef(
+            "Footprints",
+            LibraryKind.FOOTPRINT,
+            footprint_library,
+            table,
+            registered=True,
+        ),
+    )
+
+    report = import_shadow_artifacts(
+        tmp_path / "project",
+        shadow,
+        "C2040",
+        artifacts,
+        ImportOptions(
+            symbol=False,
+            footprint=False,
+            step=True,
+            wrl=False,
+            target=target,
+        ),
+        global_backup_root=tmp_path / "backups",
+    )
+
+    assert target.model_dir is not None
+    assert (target.model_dir / "NewPart.step").is_file()
+    assert table.read_text(encoding="utf-8") == table_text
+    assert report.library_registration == ()
+
+
+def test_models_only_rejects_mismatched_registered_table_without_writes(
+    tmp_path: Path,
+) -> None:
+    shadow = tmp_path / "shadow"
+    artifacts = _write_shadow_artifacts(shadow)
+    footprint_library = tmp_path / "Footprints.pretty"
+    footprint_library.mkdir()
+    table = tmp_path / "fp-lib-table"
+    table_text = (
+        '(fp_lib_table (version 7) (lib (name "Footprints") (type "KiCad") '
+        f'(uri "{(tmp_path / "Other.pretty").as_posix()}")))'
+    )
+    table.write_text(table_text, encoding="utf-8")
+    target = ImportTarget(
+        scope=ImportScope.GLOBAL,
+        footprint_library=LibraryRef(
+            "Footprints",
+            LibraryKind.FOOTPRINT,
+            footprint_library,
+            table,
+            registered=True,
+        ),
+    )
+
+    with pytest.raises(ImportServiceError, match="different path"):
+        import_shadow_artifacts(
+            tmp_path / "project",
+            shadow,
+            "C2040",
+            artifacts,
+            ImportOptions(
+                symbol=False,
+                footprint=False,
+                step=True,
+                wrl=False,
+                target=target,
+            ),
+            global_backup_root=tmp_path / "backups",
+        )
+
+    assert target.model_dir is not None and not target.model_dir.exists()
+    assert not tuple(footprint_library.iterdir())
+    assert table.read_text(encoding="utf-8") == table_text
+    assert not (tmp_path / "backups").exists()
 
 
 def test_global_import_requires_backup_root_before_writing(tmp_path: Path) -> None:
@@ -349,6 +588,67 @@ def test_transaction_failure_report_is_preserved(
     assert captured.value.report == failed
 
 
+def test_backup_creation_failure_reaches_service_report_without_target_writes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    shadow = tmp_path / "shadow"
+    artifacts = _write_shadow_artifacts(shadow)
+    target = _pending_target(tmp_path)
+    assert target.symbol_library is not None
+    assert target.footprint_library is not None
+    symbol_table_before = target.symbol_library.table_path.read_text(encoding="utf-8")
+    footprint_table_before = target.footprint_library.table_path.read_text(encoding="utf-8")
+
+    def fail_create(self: object, paths: tuple[Path, ...]) -> object:
+        raise PermissionError(f"backup root locked for {len(paths)} targets")
+
+    monkeypatch.setattr(AbsoluteBackupManager, "create", fail_create)
+
+    with pytest.raises(ImportServiceError, match="backup") as captured:
+        import_shadow_artifacts(
+            tmp_path / "project",
+            shadow,
+            "C2040",
+            artifacts,
+            ImportOptions(step=False, wrl=False, target=target),
+            global_backup_root=tmp_path / "backups",
+        )
+
+    assert not captured.value.report.success
+    assert not target.symbol_library.path.exists()
+    assert not target.footprint_library.path.exists()
+    assert target.symbol_library.table_path.read_text(encoding="utf-8") == symbol_table_before
+    assert (
+        target.footprint_library.table_path.read_text(encoding="utf-8")
+        == footprint_table_before
+    )
+    assert not (tmp_path / "backups").exists()
+
+
+def test_global_report_includes_transaction_warnings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    shadow = tmp_path / "shadow"
+    artifacts = _write_shadow_artifacts(shadow)
+    target = _pending_target(tmp_path)
+
+    def fail_prune(self: object) -> tuple[Path, ...]:
+        raise PermissionError("prune locked")
+
+    monkeypatch.setattr(AbsoluteBackupManager, "prune", fail_prune)
+
+    report = import_shadow_artifacts(
+        tmp_path / "project",
+        shadow,
+        "C2040",
+        artifacts,
+        ImportOptions(step=False, wrl=False, target=target),
+        global_backup_root=tmp_path / "backups",
+    )
+
+    assert any("prune locked" in warning for warning in report.warnings)
+
+
 def test_global_conflict_preflight_uses_custom_names_and_model_targets(
     tmp_path: Path,
 ) -> None:
@@ -382,12 +682,74 @@ def test_global_conflict_preflight_uses_custom_names_and_model_targets(
     assert str(model) in conflicts
 
 
+@pytest.mark.parametrize(
+    ("step", "wrl", "expected_names"),
+    [
+        (False, False, set()),
+        (True, False, {"NewPart.step"}),
+        (False, True, {"NewPart.wrl"}),
+    ],
+)
+def test_global_model_conflicts_follow_selected_model_modes(
+    tmp_path: Path, step: bool, wrl: bool, expected_names: set[str]
+) -> None:
+    shadow = tmp_path / "shadow"
+    artifacts = _write_shadow_artifacts(shadow)
+    stp = artifacts.step_models[0].with_suffix(".stp")
+    artifacts.step_models[0].rename(stp)
+    artifacts = ArtifactSet(
+        artifacts.root,
+        symbol_libraries=artifacts.symbol_libraries,
+        footprints=artifacts.footprints,
+        step_models=(stp,),
+        wrl_models=artifacts.wrl_models,
+    )
+    target = _pending_target(tmp_path)
+    assert target.model_dir is not None
+    target.model_dir.mkdir()
+    for name in ("NewPart.step", "NewPart.wrl"):
+        (target.model_dir / name).write_text("existing", encoding="utf-8")
+
+    conflicts = find_import_conflicts(
+        tmp_path / "project",
+        artifacts,
+        "C2040",
+        ImportOptions(
+            symbol=False,
+            footprint=False,
+            step=step,
+            wrl=wrl,
+            target=target,
+        ),
+    )
+
+    assert {Path(conflict).name for conflict in conflicts} == expected_names
+
+
 def test_global_conflict_preflight_names_unreadable_symbol_target(tmp_path: Path) -> None:
     shadow = tmp_path / "shadow"
     artifacts = _write_shadow_artifacts(shadow)
     target = _pending_target(tmp_path)
     assert target.symbol_library is not None
     target.symbol_library.path.write_text("not an s-expression", encoding="utf-8")
+
+    conflicts = find_import_conflicts(
+        tmp_path / "project",
+        artifacts,
+        "C2040",
+        ImportOptions(footprint=False, step=False, wrl=False, target=target),
+    )
+
+    assert len(conflicts) == 1
+    assert str(target.symbol_library.path) in conflicts[0]
+
+
+def test_global_conflict_preflight_names_wrong_type_symbol_target(tmp_path: Path) -> None:
+    shadow = tmp_path / "shadow"
+    artifacts = _write_shadow_artifacts(shadow)
+    target = _pending_target(tmp_path)
+    assert target.symbol_library is not None
+    target.symbol_library.path.mkdir()
 
     conflicts = find_import_conflicts(
         tmp_path / "project",

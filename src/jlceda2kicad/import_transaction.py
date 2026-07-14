@@ -168,25 +168,36 @@ class AtomicMultiRootTransaction:
             raise ImportTransactionError("No files to commit.")
         canonical_items: list[tuple[Path, Path]] = []
         for staged, target in items:
-            if not staged.is_file() or staged.stat().st_size == 0:
-                raise ImportTransactionError(f"Staged output is empty or missing: {staged}")
-            if not target.is_absolute():
-                raise ImportTransactionError(f"Target path must be absolute: {target}")
             try:
+                if not staged.is_file() or staged.stat().st_size == 0:
+                    raise ImportTransactionError(
+                        f"Staged output is empty or missing: {staged}"
+                    )
+                if not target.is_absolute():
+                    raise ImportTransactionError(f"Target path must be absolute: {target}")
                 _validate_target(target)
+                canonical_target = target.resolve(strict=False)
+                if not _is_allowed_target(
+                    canonical_target, self.allowed_roots, self.allowed_files
+                ):
+                    raise ImportTransactionError(
+                        f"Target is not in an allowlisted path: {canonical_target}"
+                    )
+            except ImportTransactionError:
+                raise
             except OSError as error:
-                raise ImportTransactionError(str(error)) from error
-            canonical_target = target.resolve(strict=False)
-            if not _is_allowed_target(
-                canonical_target, self.allowed_roots, self.allowed_files
-            ):
                 raise ImportTransactionError(
-                    f"Target is not in an allowlisted path: {canonical_target}"
-                )
+                    f"Global import preflight failed: {error}"
+                ) from error
             canonical_items.append((staged, canonical_target))
 
         targets = tuple(target for _, target in canonical_items)
-        manifest = self.backup_manager.create(targets)
+        try:
+            manifest = self.backup_manager.create(targets)
+        except OSError as error:
+            raise ImportTransactionError(
+                f"Global import backup creation failed: {error}"
+            ) from error
         committed: list[Path] = []
         temporaries: list[Path] = []
         created_directories: list[Path] = []

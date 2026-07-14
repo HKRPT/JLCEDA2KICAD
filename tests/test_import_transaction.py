@@ -183,6 +183,66 @@ def test_multi_root_transaction_accepts_explicitly_allowlisted_file(tmp_path: Pa
     assert target.read_text(encoding="utf-8") == "data"
 
 
+def test_multi_root_transaction_wraps_backup_creation_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "allowed" / "target"
+    target.parent.mkdir()
+    target.write_text("original", encoding="utf-8")
+    staged = tmp_path / "staged"
+    staged.write_text("new", encoding="utf-8")
+    manager = AbsoluteBackupManager(tmp_path / "backups")
+
+    def fail_create(paths: tuple[Path, ...]) -> object:
+        raise PermissionError(f"backup root locked for {len(paths)} target")
+
+    monkeypatch.setattr(manager, "create", fail_create)
+    transaction = AtomicMultiRootTransaction(
+        manager,
+        allowed_roots=(target.parent,),
+    )
+
+    with pytest.raises(ImportTransactionError, match="backup") as captured:
+        transaction.commit({staged: target})
+
+    assert not captured.value.report.success
+    assert target.read_text(encoding="utf-8") == "original"
+    assert not (tmp_path / "backups").exists()
+
+
+def test_multi_root_transaction_wraps_staged_preflight_oserror(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    staged = tmp_path / "staged"
+    staged.write_text("new", encoding="utf-8")
+    target = tmp_path / "allowed" / "target"
+    original_stat = Path.stat
+    staged_stat_calls = 0
+
+    def fail_second_staged_stat(
+        path: Path, *, follow_symlinks: bool = True
+    ) -> os.stat_result:
+        nonlocal staged_stat_calls
+        if path == staged:
+            staged_stat_calls += 1
+            if staged_stat_calls == 2:
+                raise PermissionError("staged stat locked")
+        return original_stat(path, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(Path, "stat", fail_second_staged_stat)
+    transaction = AtomicMultiRootTransaction(
+        AbsoluteBackupManager(tmp_path / "backups"),
+        allowed_roots=(target.parent,),
+    )
+
+    with pytest.raises(ImportTransactionError, match="staged stat locked") as captured:
+        transaction.commit({staged: target})
+
+    assert not captured.value.report.success
+    assert not target.exists()
+    assert not (tmp_path / "backups").exists()
+
+
 def test_multi_root_transaction_rejects_relative_target_before_backup(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

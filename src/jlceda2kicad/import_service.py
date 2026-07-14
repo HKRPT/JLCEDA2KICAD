@@ -143,8 +143,10 @@ def _global_conflicts(
     conflicts: list[str] = []
     if options.symbol and target.symbol_library and target.symbol_name:
         existing = target.symbol_library.path
-        if existing.is_file() and artifacts.symbol_libraries:
-            try:
+        try:
+            if existing.exists() and not existing.is_file():
+                raise OSError("symbol library target is not a regular file")
+            if existing.is_file() and artifacts.symbol_libraries:
                 incoming = extract_symbol_component_library(
                     artifacts.symbol_libraries[0].read_text(encoding="utf-8-sig"), lcsc_id
                 )
@@ -157,10 +159,10 @@ def _global_conflicts(
                     lcsc_id,
                     ConflictPolicy.CANCEL,
                 )
-            except ComponentConflictError as error:
-                conflicts.append(str(error))
-            except (OSError, UnicodeError, ValueError) as error:
-                conflicts.append(f"{existing}: cannot be safely checked: {error}")
+        except ComponentConflictError as error:
+            conflicts.append(str(error))
+        except (OSError, UnicodeError, ValueError) as error:
+            conflicts.append(f"{existing}: cannot be safely checked: {error}")
     if options.footprint and target.footprint_library and target.footprint_name:
         path = target.footprint_library.path / f"{target.footprint_name}.kicad_mod"
         try:
@@ -169,7 +171,11 @@ def _global_conflicts(
         except OSError as error:
             conflicts.append(f"{path}: cannot be safely checked: {error}")
     if target.model_dir is not None:
-        for model in artifacts.step_models + artifacts.wrl_models:
+        selected_models = (
+            (artifacts.step_models if options.step else ())
+            + (artifacts.wrl_models if options.wrl else ())
+        )
+        for model in selected_models:
             name = (
                 model.with_suffix(".step").name
                 if model.suffix.lower() == ".stp"
@@ -204,6 +210,23 @@ def _required_name(value: str | None, label: str) -> str:
         raise ImportServiceError(str(error)) from error
 
 
+def _validate_models_only_library(reference: LibraryRef) -> None:
+    if not reference.registered:
+        raise ImportServiceError(
+            "Global models-only import requires an existing registered footprint library: "
+            f"{reference.path}"
+        )
+    try:
+        registration_updates = build_global_registration(reference)
+    except (OSError, UnicodeError, ValueError) as error:
+        raise ImportServiceError(str(error)) from error
+    if registration_updates:
+        raise ImportServiceError(
+            "Global models-only import requires an existing registered footprint library: "
+            f"{reference.path}"
+        )
+
+
 def _import_global_shadow_artifacts(
     shadow_root: Path,
     lcsc_id: str,
@@ -223,6 +246,8 @@ def _import_global_shadow_artifacts(
         if needs_footprint_library
         else None
     )
+    if not options.footprint and (options.step or options.wrl) and footprint_ref:
+        _validate_models_only_library(footprint_ref)
     symbol_name = _required_name(options.target.symbol_name, "symbol") if options.symbol else None
     footprint_name = (
         _required_name(options.target.footprint_name, "footprint")
@@ -235,11 +260,14 @@ def _import_global_shadow_artifacts(
         if options.symbol and options.footprint and footprint_ref and footprint_name
         else None
     )
+    effective_association = association
     formal = discover_artifacts(shadow_root)
     staging_root = shadow_root / ".jlceda2kicad-global-commit"
     shutil.rmtree(staging_root, ignore_errors=True)
     mappings: dict[Path, Path] = {}
     warnings = list(formal.warnings)
+    if options.symbol and not options.footprint:
+        warnings.append("符号原有封装关联未在所选全局目标中验证。")
     registration: list[str] = []
     symbol_validation = None
     footprint_validations: list[ArtifactValidation] = []
@@ -263,6 +291,9 @@ def _import_global_shadow_artifacts(
             )
             if merge.skipped:
                 warnings.append(f"符号 {symbol_name} 已存在，已按策略跳过。")
+                if association is not None:
+                    effective_association = None
+                    warnings.append("符号未提交，因此封装关联未应用。")
             else:
                 merged_stage = _stage_text(
                     staging_root, f"symbols/{symbol_ref.path.name}", merge.text
@@ -362,7 +393,7 @@ def _import_global_shadow_artifacts(
             symbol_destination=symbol_destination,
             footprint_destination=footprint_destination,
             model_directory=model_dir,
-            footprint_association=association,
+            footprint_association=effective_association,
         )
     allowed_roots = tuple(
         dict.fromkeys(
@@ -387,14 +418,14 @@ def _import_global_shadow_artifacts(
     return ImportReport(
         success=committed.success,
         committed_paths=committed.committed_paths,
-        warnings=tuple(warnings),
+        warnings=tuple(warnings) + committed.warnings,
         library_registration=tuple(registration),
         backup_dir=committed.backup_dir,
         rollback_result=committed.rollback_result,
         symbol_destination=symbol_destination,
         footprint_destination=footprint_destination,
         model_directory=model_dir,
-        footprint_association=association,
+        footprint_association=effective_association,
     )
 
 
