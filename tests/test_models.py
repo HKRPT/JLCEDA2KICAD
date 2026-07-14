@@ -5,7 +5,12 @@ from jlceda2kicad.models import (
     ConflictPolicy,
     ConversionMode,
     ConversionRequest,
+    GlobalLibraryCatalog,
     ImportOptions,
+    ImportScope,
+    ImportTarget,
+    LibraryKind,
+    LibraryRef,
     ProjectContext,
 )
 from jlceda2kicad.version import __version__
@@ -57,3 +62,27 @@ def test_import_options_default_to_safe_complete_import() -> None:
     assert options.symbol and options.footprint and options.step and options.wrl
     assert options.use_cache and options.open_library_dir
     assert options.conflict_policy is ConflictPolicy.CANCEL
+
+
+def test_global_import_target_derives_model_directory(tmp_path: Path) -> None:
+    table = tmp_path / "fp-lib-table"
+    footprint = LibraryRef(
+        nickname="Harulib",
+        kind=LibraryKind.FOOTPRINT,
+        path=tmp_path / "footprints" / "Harulib.pretty",
+        table_path=table,
+    )
+    target = ImportTarget(
+        scope=ImportScope.GLOBAL,
+        footprint_library=footprint,
+        symbol_name="鐢靛 22uF",
+        footprint_name="C0805-Haru",
+    )
+
+    assert target.model_dir == tmp_path / "footprints" / "Harulib.3dshapes"
+    assert GlobalLibraryCatalog(footprints=(footprint,)).footprints == (footprint,)
+
+
+def test_import_options_keep_project_scope_by_default() -> None:
+    assert ImportOptions().target == ImportTarget()
+    assert ImportOptions().target.scope is ImportScope.PROJECT

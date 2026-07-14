@@ -1,6 +1,6 @@
 """Shared immutable data contracts used by the core and Qt adapters."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Literal
@@ -18,6 +18,46 @@ class ConflictPolicy(str, Enum):
     CANCEL = "cancel"
     SKIP_EXISTING = "skip_existing"
     OVERWRITE_COMPONENT = "overwrite_component"
+
+
+class ImportScope(str, Enum):
+    PROJECT = "project"
+    GLOBAL = "global"
+
+
+class LibraryKind(str, Enum):
+    SYMBOL = "symbol"
+    FOOTPRINT = "footprint"
+
+
+@dataclass(frozen=True, slots=True)
+class LibraryRef:
+    nickname: str
+    kind: LibraryKind
+    path: Path
+    table_path: Path
+    registered: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class GlobalLibraryCatalog:
+    symbols: tuple[LibraryRef, ...] = ()
+    footprints: tuple[LibraryRef, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ImportTarget:
+    scope: ImportScope = ImportScope.PROJECT
+    symbol_library: LibraryRef | None = None
+    footprint_library: LibraryRef | None = None
+    symbol_name: str | None = None
+    footprint_name: str | None = None
+
+    @property
+    def model_dir(self) -> Path | None:
+        if self.footprint_library is None:
+            return None
+        return self.footprint_library.path.with_suffix(".3dshapes")
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +126,7 @@ class ImportOptions:
     use_cache: bool = True
     open_library_dir: bool = True
     conflict_policy: ConflictPolicy = ConflictPolicy.CANCEL
+    target: ImportTarget = field(default_factory=ImportTarget)
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,3 +137,7 @@ class ImportReport:
     library_registration: tuple[str, ...] = ()
     backup_dir: Path | None = None
     rollback_result: tuple[str, ...] = ()
+    symbol_destination: Path | None = None
+    footprint_destination: Path | None = None
+    model_directory: Path | None = None
+    footprint_association: str | None = None

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from ._json_store import preserve_broken, write_json_atomic
+from .models import ImportScope
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +23,9 @@ class AppSettings:
     timeout_seconds: int = 120
     recent_project: Path | None = None
     window_geometry: str = ""
+    last_import_scope: ImportScope = ImportScope.PROJECT
+    last_symbol_library: str = ""
+    last_footprint_library: str = ""
 
 
 class SettingsStore:
@@ -33,6 +37,7 @@ class SettingsStore:
         data["cache_dir"] = str(settings.cache_dir) if settings.cache_dir else None
         data["log_dir"] = str(settings.log_dir) if settings.log_dir else None
         data["recent_project"] = str(settings.recent_project) if settings.recent_project else None
+        data["last_import_scope"] = settings.last_import_scope.value
         write_json_atomic(self.path, data)
 
     def load(self) -> AppSettings:
@@ -42,6 +47,9 @@ class SettingsStore:
             data: dict[str, Any] = json.loads(self.path.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
                 raise ValueError("settings root must be an object")
+            data["last_import_scope"] = ImportScope(
+                data.get("last_import_scope", ImportScope.PROJECT.value)
+            )
             for key in ("cache_dir", "log_dir", "recent_project"):
                 if data.get(key):
                     data[key] = Path(data[key])

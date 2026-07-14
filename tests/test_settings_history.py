@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from jlceda2kicad.history import HistoryEntry, HistoryStore
+from jlceda2kicad.models import ImportScope
 from jlceda2kicad.settings import AppSettings, SettingsStore
 
 
@@ -41,6 +42,21 @@ def test_settings_file_never_contains_proxy_credentials(tmp_path: Path) -> None:
     content = path.read_text(encoding="utf-8").casefold()
     assert "proxy" not in content
     assert "password" not in content
+
+
+def test_settings_round_trip_preserves_global_library_choices(tmp_path: Path) -> None:
+    store = SettingsStore(tmp_path / "settings.json")
+    expected = AppSettings(
+        last_import_scope=ImportScope.GLOBAL,
+        last_symbol_library="Harulib",
+        last_footprint_library="Harulib",
+    )
+
+    store.save(expected)
+
+    assert store.load() == expected
+    raw = json.loads(store.path.read_text(encoding="utf-8"))
+    assert raw["last_import_scope"] == "global"
 
 
 def test_history_store_keeps_newest_ten_entries(tmp_path: Path) -> None:
