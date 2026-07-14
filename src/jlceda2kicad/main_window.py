@@ -277,6 +277,7 @@ class MainWindow(QMainWindow):
         self.import_button.setEnabled(False)
         self._workspace = self.temp_manager.create(f"preview-{lcsc_id}")
         output_base = self._workspace / "preview" / "lcsc_component"
+        output_base.parent.mkdir(parents=True, exist_ok=True)
         requests = (
             ConversionRequest(
                 lcsc_id,

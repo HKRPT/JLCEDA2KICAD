@@ -15,6 +15,7 @@ from jlceda2kicad.output_discovery import discover_artifacts
 )
 def test_live_c2040_full_and_svg_conversion(tmp_path: Path) -> None:
     output = tmp_path / "preview" / "lcsc_component"
+    output.parent.mkdir(parents=True)
     result = subprocess.run(
         [
             sys.executable,
@@ -28,6 +29,7 @@ def test_live_c2040_full_and_svg_conversion(tmp_path: Path) -> None:
             "--use-cache",
         ],
         cwd=tmp_path,
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
         timeout=120,

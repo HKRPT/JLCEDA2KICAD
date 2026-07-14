@@ -98,7 +98,7 @@ def test_preview_runs_full_then_svg_and_keeps_partial_artifacts(
     first = controller.commands[0]
     assert "--full" in first.arguments  # type: ignore[attr-defined]
     output_base = Path(first.arguments[first.arguments.index("--output") + 1])  # type: ignore[attr-defined]
-    output_base.parent.mkdir(parents=True, exist_ok=True)
+    assert output_base.parent.is_dir()
     (output_base.with_suffix(".kicad_sym")).write_text(
         '(kicad_symbol_lib (version 20231120) (symbol "Part" (property "LCSC Part" "C2040")))',
         encoding="utf-8",
