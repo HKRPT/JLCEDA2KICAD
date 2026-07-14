@@ -3,9 +3,11 @@ from pathlib import Path
 
 import pytest
 
+from jlceda2kicad.absolute_backup import AbsoluteBackupManager
 from jlceda2kicad.backup import BackupManager
 from jlceda2kicad.import_transaction import (
     AtomicImportTransaction,
+    AtomicMultiRootTransaction,
     ImportTransactionError,
     prepare_shadow_project,
 )
@@ -93,3 +95,67 @@ def test_prepare_shadow_project_copies_only_managed_library_tree(tmp_path: Path)
     assert (shadow / "libs" / "lcsc_project.pretty" / "demo.kicad_mod").is_file()
     assert (shadow / "sym-lib-table").is_file()
     assert not (shadow / "libs" / "unrelated.txt").exists()
+
+
+def test_multi_root_transaction_rolls_back_after_second_replace_failure(
+    tmp_path: Path,
+) -> None:
+    symbols = tmp_path / "symbols"
+    footprints = tmp_path / "footprints" / "Haru.pretty"
+    old = symbols / "Haru.kicad_sym"
+    new = footprints / "New.kicad_mod"
+    old.parent.mkdir(parents=True)
+    old.write_text("old", encoding="utf-8")
+    first_stage = tmp_path / "stage-symbol"
+    second_stage = tmp_path / "stage-footprint"
+    first_stage.write_text("new-symbol", encoding="utf-8")
+    second_stage.write_text("new-footprint", encoding="utf-8")
+    calls = 0
+
+    def fail_second(source: Path, target: Path) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise PermissionError("locked")
+        os.replace(source, target)
+
+    transaction = AtomicMultiRootTransaction(
+        AbsoluteBackupManager(tmp_path / "backups"),
+        allowed_roots=(symbols, footprints),
+        replace=fail_second,
+    )
+
+    with pytest.raises(ImportTransactionError) as captured:
+        transaction.commit({first_stage: old, second_stage: new})
+
+    assert old.read_text(encoding="utf-8") == "old"
+    assert not new.exists()
+    assert captured.value.report.rollback_result == ()
+
+
+def test_multi_root_transaction_rejects_non_allowlisted_target(tmp_path: Path) -> None:
+    staged = tmp_path / "staged"
+    staged.write_text("data", encoding="utf-8")
+    transaction = AtomicMultiRootTransaction(
+        AbsoluteBackupManager(tmp_path / "backups"),
+        allowed_roots=(tmp_path / "allowed",),
+    )
+
+    with pytest.raises(ImportTransactionError, match="allowlisted"):
+        transaction.commit({staged: tmp_path / "outside" / "file"})
+
+
+def test_multi_root_transaction_accepts_explicitly_allowlisted_file(tmp_path: Path) -> None:
+    staged = tmp_path / "staged"
+    staged.write_text("data", encoding="utf-8")
+    target = tmp_path / "outside" / "sym-lib-table"
+    transaction = AtomicMultiRootTransaction(
+        AbsoluteBackupManager(tmp_path / "backups"),
+        allowed_roots=(tmp_path / "allowed",),
+        allowed_files=(target,),
+    )
+
+    report = transaction.commit({staged: target})
+
+    assert report.success
+    assert target.read_text(encoding="utf-8") == "data"

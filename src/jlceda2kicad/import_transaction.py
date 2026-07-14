@@ -6,6 +6,7 @@ import uuid
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
+from .absolute_backup import AbsoluteBackupManager
 from .backup import BackupManager
 from .models import ImportReport
 
@@ -22,6 +23,15 @@ def _is_within(path: Path, root: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _is_allowed_target(
+    path: Path, allowed_roots: tuple[Path, ...], allowed_files: tuple[Path, ...]
+) -> bool:
+    resolved = path.resolve()
+    if any(resolved == item.resolve() for item in allowed_files):
+        return True
+    return any(_is_within(resolved, root) for root in allowed_roots)
 
 
 class AtomicImportTransaction:
@@ -69,6 +79,65 @@ class AtomicImportTransaction:
                 rollback_result=rollback_result,
             )
             raise ImportTransactionError(f"导入提交失败：{error}", report) from error
+        finally:
+            for temporary in temporaries:
+                temporary.unlink(missing_ok=True)
+
+        self.backup_manager.prune()
+        return ImportReport(
+            success=True,
+            committed_paths=tuple(committed),
+            backup_dir=manifest.backup_dir,
+        )
+
+
+class AtomicMultiRootTransaction:
+    def __init__(
+        self,
+        backup_manager: AbsoluteBackupManager,
+        *,
+        allowed_roots: tuple[Path, ...],
+        allowed_files: tuple[Path, ...] = (),
+        replace: Callable[[Path, Path], None] = os.replace,
+    ) -> None:
+        self.backup_manager = backup_manager
+        self.allowed_roots = tuple(path.resolve() for path in allowed_roots)
+        self.allowed_files = tuple(path.resolve() for path in allowed_files)
+        self.replace = replace
+
+    def commit(self, staged_to_target: Mapping[Path, Path]) -> ImportReport:
+        if not staged_to_target:
+            raise ImportTransactionError("No files to commit.")
+        for staged, target in staged_to_target.items():
+            if not staged.is_file() or staged.stat().st_size == 0:
+                raise ImportTransactionError(f"Staged output is empty or missing: {staged}")
+            if not _is_allowed_target(target, self.allowed_roots, self.allowed_files):
+                raise ImportTransactionError(f"Target is not in an allowlisted path: {target}")
+
+        targets = tuple(staged_to_target.values())
+        manifest = self.backup_manager.create(targets)
+        committed: list[Path] = []
+        temporaries: list[Path] = []
+        try:
+            for staged, target in staged_to_target.items():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.tmp")
+                temporaries.append(temporary)
+                with staged.open("rb") as source, temporary.open("wb") as destination:
+                    shutil.copyfileobj(source, destination)
+                    destination.flush()
+                    os.fsync(destination.fileno())
+                self.replace(temporary, target)
+                committed.append(target)
+        except OSError as error:
+            rollback_result = self.backup_manager.rollback(manifest)
+            report = ImportReport(
+                success=False,
+                committed_paths=tuple(committed),
+                backup_dir=manifest.backup_dir,
+                rollback_result=rollback_result,
+            )
+            raise ImportTransactionError(f"Global import commit failed: {error}", report) from error
         finally:
             for temporary in temporaries:
                 temporary.unlink(missing_ok=True)
