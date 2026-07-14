@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = "0.1.0"
 ARCHIVE_NAME = f"JLCEDA2KICAD-{VERSION}.zip"
 _ZIP_DATE = (2020, 1, 1, 0, 0, 0)
+_BINARY_SUFFIXES = {".png"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,7 +56,10 @@ def _write_member(archive: zipfile.ZipFile, name: str, source: Path) -> None:
     info = zipfile.ZipInfo(normalized, _ZIP_DATE)
     info.compress_type = zipfile.ZIP_DEFLATED
     info.external_attr = 0o100644 << 16
-    archive.writestr(info, source.read_bytes(), compresslevel=9)
+    data = source.read_bytes()
+    if source.suffix.lower() not in _BINARY_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    archive.writestr(info, data, compresslevel=9)
 
 
 def build_package(output_dir: Path | None = None) -> BuildResult:

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from kipy.packaging.validate import validate
 
-from scripts.build_package import build_package
+from scripts.build_package import _write_member, build_package
 
 
 def test_build_package_has_pcm_root_and_direct_ipc_plugin_layout(tmp_path: Path) -> None:
@@ -45,3 +45,15 @@ def test_built_package_passes_official_kipy_validator(tmp_path: Path) -> None:
 
     errors = [message.message for message in report.messages if message.level == "error"]
     assert errors == []
+
+
+def test_package_normalizes_text_members_to_lf(tmp_path: Path) -> None:
+    source = tmp_path / "sample.py"
+    source.write_bytes(b"first\r\nsecond\r\n")
+    archive_path = tmp_path / "normalized.zip"
+
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        _write_member(archive, "plugins/sample.py", source)
+
+    with zipfile.ZipFile(archive_path) as archive:
+        assert archive.read("plugins/sample.py") == b"first\nsecond\n"
