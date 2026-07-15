@@ -139,8 +139,16 @@ def build_package(
         for name, source in sorted(files.items()):
             _write_member(archive, name, source)
     digest = hashlib.sha256(archive_path.read_bytes()).hexdigest()
-    sha256_path.write_text(f"{digest}  {archive_path.name}\n", encoding="ascii")
-    manifest_path.write_text("\n".join(sorted(files)) + "\n", encoding="utf-8")
+    sha256_path.write_text(
+        f"{digest}  {archive_path.name}\n",
+        encoding="ascii",
+        newline="\n",
+    )
+    manifest_path.write_text(
+        "\n".join(sorted(files)) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     return BuildResult(archive_path, sha256_path, manifest_path)
 
 
