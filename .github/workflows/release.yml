@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: git fetch origin main:refs/remotes/origin/main
+      - name: Validate release tag and metadata
+        id: release
+        run: python scripts/check_release.py --github-output
+
+  test:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install Qt runtime libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libegl1
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m ruff check .
+      - run: python -m mypy src scripts
+      - run: >-
+          python -m pytest --cov=jlceda2kicad
+          --cov-report=term-missing --cov-report=xml
+
+  package:
+    needs: [preflight, test]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python scripts/offline_vendor.py download --wheelhouse .offline-build/wheelhouse
+      - run: >-
+          python scripts/offline_vendor.py expand
+          --wheelhouse .offline-build/wheelhouse
+          --output .offline-build/vendor
+          --licenses .offline-build/third_party_licenses
+          --inventory .offline-build/inventory.json
+      - run: python scripts/offline_vendor.py verify --vendor .offline-build/vendor
+      - run: python scripts/build_package.py --vendor-dir .offline-build/vendor
+      - run: >-
+          python -m kipy.packaging validate
+          dist/JLCEDA2KICAD-${{ needs.preflight.outputs.version }}.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pcm-release-assets
+          path: dist/JLCEDA2KICAD-${{ needs.preflight.outputs.version }}.zip*
+
+  publish-release:
+    needs: [preflight, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/download-artifact@v4
+        with:
+          name: pcm-release-assets
+          path: dist
+      - run: python -m pip install -e ".[dev]"
+      - run: python scripts/publish_release.py --dist dist
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-pages:
+    needs: publish-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: >-
+          python scripts/build_repository_site.py github
+          --base-url "https://hkrpt.github.io/JLCEDA2KICAD"
+          --output _site
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy-pages:
+    needs: build-pages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

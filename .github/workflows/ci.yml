@@ -31,7 +31,7 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
       - run: python -m ruff check .
-      - run: python -m mypy src
+      - run: python -m mypy src scripts
       - run: python -m pytest --cov=jlceda2kicad --cov-report=term-missing --cov-report=xml
       - uses: actions/upload-artifact@v4
         with:
@@ -52,8 +52,26 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
-      - run: python scripts/build_package.py
+      - run: python scripts/offline_vendor.py download --wheelhouse .offline-build/wheelhouse
+      - run: >-
+          python scripts/offline_vendor.py expand
+          --wheelhouse .offline-build/wheelhouse
+          --output .offline-build/vendor
+          --licenses .offline-build/third_party_licenses
+          --inventory .offline-build/inventory.json
+      - run: python scripts/offline_vendor.py verify --vendor .offline-build/vendor
+      - run: python scripts/build_package.py --vendor-dir .offline-build/vendor
       - run: python -m kipy.packaging validate dist/JLCEDA2KICAD-0.1.0.zip
+      - run: >-
+          python scripts/build_repository_site.py local
+          --tag v0.1.0
+          --archive dist/JLCEDA2KICAD-0.1.0.zip
+          --checksum dist/JLCEDA2KICAD-0.1.0.zip.sha256
+          --manifest dist/JLCEDA2KICAD-0.1.0.zip.manifest.txt
+          --download-url http://127.0.0.1:8765/JLCEDA2KICAD-0.1.0.zip
+          --base-url http://127.0.0.1:8765
+          --published-at 2026-07-15T08:00:00Z
+          --output _site
       - uses: actions/upload-artifact@v4
         with:
           name: JLCEDA2KICAD-0.1.0
@@ -61,3 +79,4 @@ jobs:
             dist/JLCEDA2KICAD-0.1.0.zip
             dist/JLCEDA2KICAD-0.1.0.zip.sha256
             dist/JLCEDA2KICAD-0.1.0.zip.manifest.txt
+            _site

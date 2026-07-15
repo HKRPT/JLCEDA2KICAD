@@ -10,7 +10,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from jlceda2kicad.version import __version__  # type: ignore[import-untyped]
+from jlceda2kicad.version import __version__
 from scripts.release_policy import (
     DistributionError,
     parse_release_tag,
