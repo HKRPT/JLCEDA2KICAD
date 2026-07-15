@@ -30,6 +30,7 @@ class HttpRequest:
     url: str
     headers: Mapping[str, str] = field(repr=False)
     body: bytes | None = field(default=None, repr=False)
+    timeout_seconds: float = field(default=30, repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,7 +107,7 @@ class UrllibTransport:
             method=request.method,
         )
         try:
-            with urllib.request.urlopen(raw, timeout=30) as response:
+            with urllib.request.urlopen(raw, timeout=request.timeout_seconds) as response:
                 return HttpResponse(
                     response.status,
                     dict(response.headers.items()),
@@ -205,9 +206,16 @@ class GitHubClient:
         *,
         body: bytes | None = None,
         headers: Mapping[str, str] | None = None,
+        timeout_seconds: float = 30,
     ) -> HttpResponse:
         response = self.transport.send(
-            HttpRequest(method, url, self._headers(**dict(headers or {})), body)
+            HttpRequest(
+                method,
+                url,
+                self._headers(**dict(headers or {})),
+                body,
+                timeout_seconds,
+            )
         )
         if not 200 <= response.status < 300:
             raise DistributionError(
@@ -318,6 +326,7 @@ class GitHubClient:
             url,
             body=data,
             headers={"Content-Type": content_type},
+            timeout_seconds=600,
         )
         return _asset(self._json(response))
 

@@ -151,6 +151,7 @@ def test_upload_strips_template_and_sets_content_type() -> None:
     request = transport.requests[0]
     assert request.url.endswith("/assets?name=demo.zip")
     assert request.headers["Content-Type"] == "application/zip"
+    assert request.timeout_seconds == 600
 
 
 class MemoryClient:
