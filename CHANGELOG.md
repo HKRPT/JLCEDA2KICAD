@@ -9,12 +9,16 @@ All notable changes to this project are documented here.
 - Global personal-library target selection with independent symbol and footprint
   libraries and names, automatic `<library>:<footprint>` association, normalized
   absolute 3D model references, and multi-root backup rollback.
+- A deterministic Windows x64/Python 3.11 offline PCM archive containing the
+  complete pinned runtime and third-party license inventory.
 
 ### Fixed
 
 - Normalize legacy converter `(module ...)` roots to modern `(footprint ...)`
   files and explain that newly registered global libraries require a full KiCad
   restart, including Project Manager, before they are loaded.
+- Rewrite project-library symbol associations to the registered
+  `LCSC_Project:<footprint>` nickname.
 
 ## [0.1.0] - 2026-07-14
 

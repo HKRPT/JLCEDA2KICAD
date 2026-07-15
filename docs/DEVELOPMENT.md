@@ -65,9 +65,24 @@ Build artifacts are intentionally ignored by Git:
 
 ```powershell
 ./.venv/Scripts/python.exe scripts/render_icons.py
-./.venv/Scripts/python.exe scripts/build_package.py
+./.venv/Scripts/python.exe scripts/offline_vendor.py download `
+  --wheelhouse .offline-build/wheelhouse
+./.venv/Scripts/python.exe scripts/offline_vendor.py expand `
+  --wheelhouse .offline-build/wheelhouse `
+  --output .offline-build/vendor
+./.venv/Scripts/python.exe scripts/build_package.py `
+  --vendor-dir .offline-build/vendor
 ./.venv/Scripts/python.exe -m kipy.packaging validate dist/JLCEDA2KICAD-0.1.0.zip
 ```
+
+`offline_vendor.py download` respects the builder's normal pip configuration.
+Mainland-China builders can configure their preferred reachable mirror in
+`pip.ini` or pass it explicitly with `--index-url`; the project does not hard-code
+or redistribute a mirror URL. A fully disconnected build can instead use a
+previously populated wheel directory with `--no-index --find-links <directory>`.
+These choices affect only release construction. The resulting PCM ZIP installs
+and starts without contacting any package index because its runtime is already
+expanded under `plugins/vendor`.
 
 The ZIP is deterministic and is accompanied by a SHA-256 sidecar and sorted
 file manifest. Do not commit `dist`.

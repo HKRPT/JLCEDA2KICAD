@@ -3,11 +3,12 @@
 Use disposable projects only. Run the full list separately in KiCad 9.0.6 and
 10.0.4 on Windows.
 
-- [ ] Run `scripts/install_dev.ps1`; confirm only the Documents-based IPC plugin
-  directory changes.
-- [ ] Refresh plugins and confirm KiCad creates the dedicated Python environment
-  with all pinned dependencies.
-- [ ] Start PCB Editor and confirm the toolbar icon/action is visible.
+- [ ] Install the offline PCM ZIP with “从文件安装”; confirm only this plugin's
+  PCM directories and dedicated environment change.
+- [ ] Make PyPI/GitHub/overseas mirrors unreachable, refresh plugins, and confirm
+  KiCad creates the dedicated environment without downloading a Python package.
+- [ ] Start PCB Editor and confirm the teal JLC toolbar action is visible. On
+  KiCad 10 it need not be listed under “工具 → 外部插件”.
 - [ ] Launch the PySide6 window and confirm the IPC project path and KiCad version.
 - [ ] Select a different disposable project manually, including a Chinese/space path.
 - [ ] Query C2040; inspect streaming output and all available preview tabs.
@@ -23,7 +24,7 @@ Use disposable projects only. Run the full list separately in KiCad 9.0.6 and
 - [ ] Simulate a locked target file and confirm backup/rollback reporting.
 - [ ] Confirm proxy credentials and `KICAD_API_TOKEN` do not appear in logs.
 - [ ] Confirm settings/history survive restart and malformed JSON is preserved/reset.
-- [ ] Run `scripts/uninstall_dev.ps1`; confirm other plugins remain untouched.
+- [ ] Uninstall through PCM; confirm other plugins and application data remain untouched.
 - [ ] Optionally run uninstall with `-PurgeAppData` and confirm only this app's data is removed.
 
 ## Global personal library smoke test

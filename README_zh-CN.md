@@ -29,23 +29,39 @@ KiCad 全局个人库。
 - Windows 10/11
 - KiCad 9.0.1 或更高版本（含 KiCad 10）
 - KiCad 自带 Python 3.11
-- `easyeda2kicad==1.0.1`
-- `kicad-python==0.7.1`
-- `PySide6==6.11.1`
+- 离线 PCM ZIP（已内置 `easyeda2kicad==1.0.1`、`kicad-python==0.7.1`、
+  `PySide6==6.11.1` 及其完整 Windows x64/Python 3.11 依赖）
 
 插件使用 `runtime: ipc`，不使用旧版 `pcbnew` SWIG API。
 
+## 本地离线安装（推荐）
+
+1. 下载 `JLCEDA2KICAD-0.1.0.zip`，不要解压。
+2. 在 KiCad 工程管理器打开“扩展内容管理器”，点击“从文件安装”，选择该 ZIP。
+3. 打开一个 PCB 工程；首次扫描时 KiCad 会创建插件专用 Python 环境，请等待刷新完成。
+4. 在 PCB 编辑器顶部工具栏寻找青绿色的 JLC 图标，悬停时会显示
+   **JLCEDA2KICAD Importer**，点击即可启动。
+
+KiCad 10 中该 IPC 动作可能只显示在顶部工具栏，不一定列在“工具 → 外部插件”的
+子菜单中。“工具 → 外部插件 → 刷新插件”用于重新扫描；刷新后仍未显示时，请完整退出
+KiCad（包括工程管理器）再打开工程。
+
+安装、首次启动和转换器进程启动都不需要访问 PyPI、GitHub 或国外软件源，也不要求
+用户另外安装 Python 包。只有查询尚未缓存的 LCSC C 编号时才需要访问 EasyEDA/LCSC
+元件数据服务；插件会继承系统代理环境。适用于中国大陆用户的发布包必须是带有
+`plugins/vendor` 的离线 PCM ZIP，不能用 GitHub 自动生成的“Source code”ZIP 代替。
+
 ## 开发安装
 
-只复制本插件到 KiCad 9/10 用户 IPC 插件目录：
+先按“开发与打包”准备 `.offline-build/vendor`，再只复制本插件及该内置运行库到
+KiCad 9/10 用户 IPC 插件目录：
 
 ```powershell
 ./scripts/install_dev.ps1
 ```
 
-重启 PCB 编辑器；若插件没有自动加载，请选择“工具 → 外部插件 → 刷新插件”。KiCad
-会建立插件专用 Python 环境并按 `requirements.txt` 安装固定依赖，不要使用 `--user`
-把依赖装入 KiCad 的基础 Python。工具栏中的绿色 JLC 按钮就是
+重启 PCB 编辑器；若插件没有自动加载，请选择“工具 → 外部插件 → 刷新插件”。不要使用
+`--user` 把依赖装入 KiCad 的基础 Python。工具栏中的青绿色 JLC 按钮就是
 **JLCEDA2KICAD Importer**。卸载只删除本插件：
 
 ```powershell

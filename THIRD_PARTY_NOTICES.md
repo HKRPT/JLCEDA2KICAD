@@ -1,7 +1,10 @@
 # Third-party notices
 
-JLCEDA2KICAD project code is MIT licensed. Its pinned runtime dependencies are
-installed separately through `requirements.txt` and retain their own licenses.
+JLCEDA2KICAD project code is MIT licensed. The offline PCM ZIP bundles the pinned
+Windows x64/Python 3.11 runtime under `plugins/vendor`; those distributions retain
+their own licenses. Corresponding license files and an exact package inventory
+are included under `plugins/third_party_licenses` in the ZIP. The generated
+runtime payload is not committed to this source repository.
 
 ## easyeda2kicad 1.0.1
 
@@ -22,6 +25,5 @@ installed separately through `requirements.txt` and retain their own licenses.
 - License declared by package metadata: LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 - Use: desktop UI, asynchronous process control, SVG, and software drawing.
 
-This repository does not vendor those Python distributions in source control or
-inside the PCM ZIP. Consult each dependency's distribution for complete license
-texts and corresponding-source obligations.
+Consult each bundled distribution and its included license files for complete
+terms and corresponding-source obligations.

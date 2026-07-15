@@ -34,23 +34,48 @@ server, database, or team features.
 - Windows 10/11
 - KiCad 9.0.1 or newer, including KiCad 10
 - KiCad's Python 3.11 runtime
-- `easyeda2kicad==1.0.1`, `kicad-python==0.7.1`, `PySide6==6.11.1`
+- the offline PCM ZIP, which bundles `easyeda2kicad==1.0.1`,
+  `kicad-python==0.7.1`, `PySide6==6.11.1`, and their complete Windows
+  x64/Python 3.11 dependency closure
 
 The plugin metadata uses `runtime: ipc`; no legacy `pcbnew` SWIG API is used.
 
+## Local offline installation (recommended)
+
+1. Download `JLCEDA2KICAD-0.1.0.zip` and do not extract it.
+2. In KiCad Project Manager, open **Plugin and Content Manager**, select
+   **Install from File**, and choose that ZIP.
+3. Open a PCB project. On the first scan, wait while KiCad creates the plugin's
+   dedicated Python environment.
+4. In PCB Editor, click the teal JLC icon in the top toolbar. Its tooltip is
+   **JLCEDA2KICAD Importer**.
+
+On KiCad 10 the IPC action may appear only in the top toolbar and not as an item
+under **Tools > External Plugins**. That submenu's **Refresh Plugins** command
+rescans plugins. If the button is still absent after a refresh, exit all KiCad
+windows, including Project Manager, and reopen the project.
+
+Installation, first launch, and converter-process startup do not contact PyPI,
+GitHub, or an overseas package mirror, and users do not install Python packages
+separately. Querying an uncached LCSC identifier still needs access to the
+EasyEDA/LCSC component-data service; the plugin inherits the system proxy
+environment. A mainland-China-ready release must be the offline PCM ZIP that
+contains `plugins/vendor`, not GitHub's automatically generated source ZIP.
+
 ## Development install
 
-Copy only this plugin into the user IPC plugin directories:
+Stage `.offline-build/vendor` as described under development and packaging,
+then copy only this plugin and that bundled runtime into the user IPC plugin
+directories:
 
 ```powershell
 ./scripts/install_dev.ps1
 ```
 
 Restart PCB Editor and select **Tools > External Plugins > Refresh Plugins** if
-the action is not loaded automatically. KiCad creates a dedicated Python
-environment and installs the pinned packages from `requirements.txt`; do not
-install them into KiCad's base Python with `--user`. The action is named
-**JLCEDA2KICAD Importer** and appears as the green JLC button in the PCB toolbar.
+the action is not loaded automatically. Do not install dependencies into KiCad's
+base Python with `--user`. The action is named **JLCEDA2KICAD Importer** and
+appears as the teal JLC button in the PCB toolbar.
 To uninstall only this plugin:
 
 ```powershell
