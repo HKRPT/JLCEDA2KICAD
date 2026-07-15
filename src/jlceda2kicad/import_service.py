@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .absolute_backup import AbsoluteBackupManager
 from .artifact_rewrite import (
+    generated_names,
     normalize_footprint_root,
     rewrite_footprint_component,
     rewrite_symbol_component,
@@ -465,14 +466,33 @@ def import_shadow_artifacts(
     target_symbol = project_root / "libs" / "lcsc_project.kicad_sym"
     target_footprint_dir = project_root / "libs" / "lcsc_project.pretty"
     target_model_dir = project_root / "libs" / "lcsc_project.3dshapes"
+    selected_footprints = (
+        _select_by_preview(formal.footprints, preview_artifacts.footprints)
+        if options.footprint
+        else ()
+    )
+    project_association: str | None = None
 
     try:
+        if options.footprint and not selected_footprints:
+            raise ImportServiceError("正式转换没有生成所选封装。")
+        if options.symbol and options.footprint and len(selected_footprints) == 1:
+            project_association = f"LCSC_Project:{selected_footprints[0].stem}"
+
         if options.symbol:
             if not formal.symbol_libraries:
                 raise ImportServiceError("正式转换没有生成符号库。")
             formal_symbol = formal.symbol_libraries[0]
             formal_text = formal_symbol.read_text(encoding="utf-8-sig")
             incoming_text = extract_symbol_component_library(formal_text, normalized)
+            if project_association is not None:
+                symbol_name, _ = generated_names(formal, normalized)
+                incoming_text = rewrite_symbol_component(
+                    incoming_text,
+                    normalized,
+                    symbol_name,
+                    project_association,
+                )
             incoming_stage = _stage_text(staging_root, "incoming.kicad_sym", incoming_text)
             symbol_validation = validate_symbol_library(incoming_stage)
             existing_text = (
@@ -483,18 +503,14 @@ def import_shadow_artifacts(
             )
             if merge.skipped:
                 warnings.append(f"符号 {normalized} 已存在，已按策略跳过。")
+                if project_association is not None:
+                    project_association = None
+                    warnings.append("符号未提交，因此封装关联未应用。")
             else:
                 merged_stage = _stage_text(staging_root, "libs/lcsc_project.kicad_sym", merge.text)
                 validate_symbol_library(merged_stage)
                 mappings[merged_stage] = target_symbol
 
-        selected_footprints = (
-            _select_by_preview(formal.footprints, preview_artifacts.footprints)
-            if options.footprint
-            else ()
-        )
-        if options.footprint and not selected_footprints:
-            raise ImportServiceError("正式转换没有生成所选封装。")
         model_mode = "wrl" if options.wrl else "step" if options.step else "none"
         footprint_mappings: dict[Path, Path] = {}
         for footprint in selected_footprints:
@@ -584,6 +600,7 @@ def import_shadow_artifacts(
             symbol_destination=project_symbol_destination,
             footprint_destination=project_footprint_destination,
             model_directory=target_model_dir if options.step or options.wrl else None,
+            footprint_association=project_association,
         )
     try:
         committed = AtomicImportTransaction(
@@ -602,4 +619,5 @@ def import_shadow_artifacts(
         symbol_destination=project_symbol_destination,
         footprint_destination=project_footprint_destination,
         model_directory=target_model_dir if options.step or options.wrl else None,
+        footprint_association=project_association,
     )

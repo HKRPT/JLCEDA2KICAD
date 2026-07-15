@@ -43,6 +43,7 @@ def _write_shadow_artifacts(shadow: Path) -> ArtifactSet:
   (version 20231120)
   (symbol "Existing" (property "LCSC Part" "C1"))
   (symbol "NewPart" (property "LCSC Part" "C2040")
+    (property "Footprint" "lcsc_project:NewPart")
     (symbol "NewPart_1_1"
       (pin passive line (at 0 0 0) (length 2.54) (name "A") (number "1"))))
 )""",
@@ -96,12 +97,14 @@ def test_import_shadow_commits_component_tables_and_step_only_reference(
         encoding="utf-8"
     )
     assert 'symbol "Existing"' in symbol_text and 'symbol "NewPart"' in symbol_text
+    assert 'property "Footprint" "LCSC_Project:NewPart"' in symbol_text
     assert "NewPart.step" in footprint_text and "NewPart.wrl" not in footprint_text
     assert (project / "libs" / "lcsc_project.3dshapes" / "NewPart.step").is_file()
     assert not (project / "libs" / "lcsc_project.3dshapes" / "NewPart.wrl").exists()
     assert (project / "sym-lib-table").is_file()
     assert (project / "fp-lib-table").is_file()
     assert set(report.library_registration) == {"LCSC_Project (symbol)", "LCSC_Project (footprint)"}
+    assert report.footprint_association == "LCSC_Project:NewPart"
 
 
 def test_import_shadow_accepts_easyeda_legacy_module(tmp_path: Path) -> None:
