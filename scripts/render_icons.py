@@ -26,7 +26,7 @@ def render_icons() -> tuple[Path, ...]:
         renderer.render(painter, QRectF(0, 0, size, size))
         painter.end()
         output = ROOT / "resources" / f"icon_{size}.png"
-        if not image.save(str(output), "PNG"):
+        if not image.save(str(output), b"PNG"):
             raise RuntimeError(f"failed to save icon: {output}")
         outputs.append(output)
     return tuple(outputs)

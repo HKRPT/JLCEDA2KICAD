@@ -5,8 +5,10 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from jlceda2kicad.version import __version__
+
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.1.0"
+VERSION = __version__
 ARCHIVE_NAME = f"JLCEDA2KICAD-{VERSION}.zip"
 _ZIP_DATE = (2020, 1, 1, 0, 0, 0)
 _BINARY_SUFFIXES = {".png"}

@@ -1,10 +1,39 @@
 import hashlib
+import json
 import zipfile
 from pathlib import Path
 
 from kipy.packaging.validate import validate
 
-from scripts.build_package import _write_member, build_package
+from jlceda2kicad.version import __version__
+from scripts.build_package import ARCHIVE_NAME, VERSION, _write_member, build_package
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_package_version_has_one_stable_archive_metadata_entry() -> None:
+    metadata = json.loads((ROOT / "metadata.json").read_text(encoding="utf-8"))
+    versions = metadata["versions"]
+
+    assert VERSION == __version__ == "0.1.0"
+    assert ARCHIVE_NAME == f"JLCEDA2KICAD-{__version__}.zip"
+    assert len(versions) == 1
+    assert versions[0]["version"] == __version__
+    assert versions[0]["status"] == "stable"
+    assert versions[0]["kicad_version"] == "9.0.1"
+    assert versions[0]["platforms"] == ["windows"]
+    assert versions[0]["runtime"] == "ipc"
+    assert not any(key.startswith("download_") for key in versions[0])
+
+
+def test_built_archive_contains_the_same_metadata_bytes(tmp_path: Path) -> None:
+    result = build_package(tmp_path)
+
+    with zipfile.ZipFile(result.archive) as archive:
+        packaged = json.loads(archive.read("metadata.json"))
+    source = json.loads((ROOT / "metadata.json").read_text(encoding="utf-8"))
+
+    assert packaged == source
 
 
 def test_build_package_has_pcm_root_and_direct_ipc_plugin_layout(tmp_path: Path) -> None:
