@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -63,6 +64,31 @@ def test_process_controller_uses_exact_unicode_working_directory_and_inherits_en
     assert str(working_dir) in result.stdout
     assert "转换成功" in result.stdout
     assert "inherited" in result.stdout
+
+
+def test_process_controller_preserves_bootstrapped_pythonpath_for_children(
+    qtbot: object, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vendor = str((tmp_path / "plugin" / "vendor").resolve())
+    inherited = str((tmp_path / "inherited").resolve())
+    expected = os.pathsep.join((vendor, inherited))
+    monkeypatch.setenv("PYTHONPATH", expected)
+    controller = ProcessController()
+
+    with qtbot.waitSignal(controller.completed, timeout=5_000) as blocker:  # type: ignore[attr-defined]
+        controller.start(
+            _command(
+                "import os; print(os.environ['PYTHONPATH']); "
+                "print(os.environ['PYTHONIOENCODING']); print(os.environ['PYTHONUTF8'])",
+                tmp_path,
+            ),
+            timeout_ms=2_000,
+        )
+
+    result = blocker.args[0]
+    assert isinstance(result, ProcessResult)
+    assert result.succeeded
+    assert result.stdout.splitlines() == [expected, "utf-8", "1"]
 
 
 def test_process_controller_timeout_terminates_process(qtbot: object, tmp_path: Path) -> None:

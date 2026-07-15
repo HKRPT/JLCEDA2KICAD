@@ -62,6 +62,9 @@ class ProcessController(QObject):
         self._timed_out = False
         self._cancelled = False
         self._completed = False
+        # plugin_bootstrap updates os.environ before the UI is imported, and
+        # systemEnvironment carries that vendor-first PYTHONPATH into converter
+        # children while retaining user proxy settings.
         environment = QProcessEnvironment.systemEnvironment()
         # Every supported converter command is launched through sys.executable.
         # Pin its standard streams to UTF-8 so non-ASCII project paths work even
