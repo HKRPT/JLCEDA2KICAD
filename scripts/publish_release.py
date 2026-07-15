@@ -11,8 +11,15 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from jlceda2kicad.version import __version__
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from scripts.github_releases import GitHubClient, ensure_release_assets
-from scripts.release_policy import DistributionError, validate_source_release
+from scripts.release_policy import (
+    DistributionError,
+    validate_source_release,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 METADATA = ROOT / "metadata.json"

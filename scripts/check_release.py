@@ -11,6 +11,10 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from jlceda2kicad.version import __version__
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from scripts.release_policy import (
     DistributionError,
     parse_release_tag,

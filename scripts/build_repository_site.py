@@ -11,7 +11,13 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from scripts.github_releases import GitHubClient, load_public_release_payloads
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.github_releases import (
+    GitHubClient,
+    load_public_release_payloads,
+)
 from scripts.pcm_repository import SiteBuildRequest, build_site
 from scripts.release_policy import (
     DistributionError,

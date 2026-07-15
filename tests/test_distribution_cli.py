@@ -1,9 +1,30 @@
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from scripts import build_repository_site, publish_release
 from scripts.build_package import build_package
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize(
+    "script",
+    ["check_release.py", "publish_release.py", "build_repository_site.py"],
+)
+def test_distribution_scripts_support_direct_file_execution(script: str) -> None:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / script), "--help"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        stdin=subprocess.DEVNULL,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_publish_cli_requires_token_without_printing_it(
