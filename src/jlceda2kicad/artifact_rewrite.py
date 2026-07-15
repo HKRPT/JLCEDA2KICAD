@@ -103,15 +103,28 @@ def generated_names(artifacts: ArtifactSet, lcsc_id: str) -> tuple[str, str]:
     return symbol_name, footprint_name
 
 
+def normalize_footprint_root(text: str, name: str) -> str:
+    """Return a KiCad-library footprint with a modern root and filename-safe name."""
+
+    normalized = validate_component_name(name, "footprint")
+    root = parse_one(text)
+    if root.head not in {"footprint", "module"} or len(root.atoms) < 2:
+        raise ValueError("converted output is not a footprint or module")
+    replacements = [(root.atoms[1].start, root.atoms[1].end, _quoted(normalized))]
+    if root.head == "module":
+        replacements.append((root.atoms[0].start, root.atoms[0].end, "footprint"))
+    return _apply(text, replacements)
+
+
 def rewrite_footprint_component(
     text: str, new_name: str, *, model_mode: str, model_dir: Path
 ) -> str:
     normalized = validate_component_name(new_name, "footprint")
-    selected = rewrite_footprint_models(text, model_mode)
+    selected = normalize_footprint_root(
+        rewrite_footprint_models(text, model_mode), normalized
+    )
     root = parse_one(selected)
-    if root.head not in {"footprint", "module"} or len(root.atoms) < 2:
-        raise ValueError("converted output is not a footprint or module")
-    replacements = [(root.atoms[1].start, root.atoms[1].end, _quoted(normalized))]
+    replacements: list[tuple[int, int, str]] = []
     for child in root.children:
         atoms = child.atoms
         if child.head == "fp_text" and len(atoms) >= 3 and atoms[1].value == "value":

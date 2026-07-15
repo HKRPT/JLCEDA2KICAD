@@ -455,7 +455,10 @@ class ImportResultDialog(QDialog):
         )
         if registrations:
             lines.append("新注册：" + "、".join(registrations))
-            lines.append("新注册的库若未立即出现，请重启相应的 KiCad 编辑器。")
+            lines.append(
+                "新注册的全局库会在下次启动时加载；请完全退出并重新启动 "
+                "KiCad（包括工程管理器）。"
+            )
         warnings = tuple(item for item in report.warnings if item.strip())
         if warnings:
             lines.append("警告：\n" + "\n".join(warnings))

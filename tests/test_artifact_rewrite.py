@@ -77,7 +77,9 @@ def test_renames_modern_and_legacy_footprint_with_absolute_model(
         text, "C0805-Haru", model_mode="step", model_dir=models
     )
 
-    assert parse_one(rewritten).atoms[1].value == "C0805-Haru"
+    root = parse_one(rewritten)
+    assert root.head == "footprint"
+    assert root.atoms[1].value == "C0805-Haru"
     assert 'fp_text value "C0805-Haru"' in rewritten
     assert (models / "Old.step").as_posix() in rewritten.replace("\\", "/")
 

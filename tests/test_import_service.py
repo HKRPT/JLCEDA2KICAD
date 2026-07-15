@@ -126,7 +126,7 @@ def test_import_shadow_accepts_easyeda_legacy_module(tmp_path: Path) -> None:
 
     assert report.success
     imported = project / "libs" / "lcsc_project.pretty" / "NewPart.kicad_mod"
-    assert imported.read_text(encoding="utf-8").startswith("(module easyeda2kicad:NewPart")
+    assert imported.read_text(encoding="utf-8").startswith('(footprint "NewPart"')
 
 
 def test_skip_policy_skips_colliding_footprint_but_imports_missing_model(

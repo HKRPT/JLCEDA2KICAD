@@ -689,7 +689,7 @@ def test_result_dialog_only_displays_reported_details(
     assert "Needs attention" in details
     assert "Symbols" in details
     assert "KiCad" in details
-    assert "重启" in details
+    assert "完全退出并重新启动 KiCad（包括工程管理器）" in details
     assert "3D 模型目录" not in details
     assert "封装关联" not in details
 

@@ -31,6 +31,8 @@ Use disposable projects only. Run the full list separately in KiCad 9.0.6 and
 - [ ] Select the existing Harulib entries read-only and confirm their resolved paths are shown.
 - [ ] Create disposable Codex_Global_Smoke symbol and footprint libraries in a disposable directory.
 - [ ] Import C6119899 as symbol `Codex_C6119899` and footprint `Codex_C0805`.
+- [ ] Completely exit KiCad (including Project Manager), reopen it, and confirm
+  `Codex_Global_Smoke:Codex_C0805` is searchable in the footprint chooser.
 - [ ] Confirm the symbol Footprint property is `Codex_Global_Smoke:Codex_C0805`.
 - [ ] Confirm STEP/WRL files are under the sibling `Codex_Global_Smoke.3dshapes` directory.
 - [ ] Exercise cancel, skip, and overwrite without changing unrelated symbols or footprints.

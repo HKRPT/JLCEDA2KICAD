@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .absolute_backup import AbsoluteBackupManager
 from .artifact_rewrite import (
+    normalize_footprint_root,
     rewrite_footprint_component,
     rewrite_symbol_component,
     validate_component_name,
@@ -497,8 +498,11 @@ def import_shadow_artifacts(
         model_mode = "wrl" if options.wrl else "step" if options.step else "none"
         footprint_mappings: dict[Path, Path] = {}
         for footprint in selected_footprints:
-            rewritten = rewrite_footprint_models(
-                footprint.read_text(encoding="utf-8-sig"), model_mode
+            rewritten = normalize_footprint_root(
+                rewrite_footprint_models(
+                    footprint.read_text(encoding="utf-8-sig"), model_mode
+                ),
+                footprint.stem,
             )
             staged = _stage_text(
                 staging_root, f"libs/lcsc_project.pretty/{footprint.name}", rewritten

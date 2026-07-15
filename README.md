@@ -87,9 +87,9 @@ project. To import into libraries registered for the current KiCad user instead:
    `<footprint-library>:<footprint>` association. The association is applied
    when both the symbol and footprint are imported.
 6. Import and inspect the result dialog for the exact symbol, footprint, model,
-   and backup paths. If a newly registered library is not immediately visible,
-   restart only the relevant KiCad Symbol or Footprint Editor; editor-side
-   library-table caching can outlive an importer refresh.
+   and backup paths. A newly registered global library is loaded on the next
+   KiCad start, so completely exit KiCad (including the Project Manager) and
+   reopen it before searching for the new library.
 
 Global imports store backups under the application-local
 `backups/global/<timestamp-UUID>` directory (normally

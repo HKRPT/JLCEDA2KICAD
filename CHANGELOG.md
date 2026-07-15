@@ -10,6 +10,12 @@ All notable changes to this project are documented here.
   libraries and names, automatic `<library>:<footprint>` association, normalized
   absolute 3D model references, and multi-root backup rollback.
 
+### Fixed
+
+- Normalize legacy converter `(module ...)` roots to modern `(footprint ...)`
+  files and explain that newly registered global libraries require a full KiCad
+  restart, including Project Manager, before they are loaded.
+
 ## [0.1.0] - 2026-07-14
 
 ### Added
