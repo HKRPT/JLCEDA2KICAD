@@ -17,5 +17,6 @@ temp/
 tmp/
 .smoke/
 .worktrees/
+.offline-build/
 .idea/
 .vscode/

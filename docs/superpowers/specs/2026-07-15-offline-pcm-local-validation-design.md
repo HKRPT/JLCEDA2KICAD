@@ -141,7 +141,10 @@ performed.
 ## Error handling and evidence
 
 - A missing, incompatible, unlicensed, hash-mismatched, unsafe, or conflicting
-  wheel aborts before a ZIP is produced.
+  wheel aborts before a ZIP is produced. The sole accepted exception is the
+  published `kicad-python` 0.7.1 wheel's stale METADATA entry in RECORD: its
+  whole-wheel SHA-256 plus the recorded and actual member hashes/sizes are all
+  pinned in an audited exception file, and any byte change still aborts.
 - An import must report its resolved `__file__`; a system or old environment
   origin is a failure.
 - A failed KiCad environment job, missing action, process launch error, UI

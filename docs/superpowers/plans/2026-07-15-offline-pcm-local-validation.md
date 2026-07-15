@@ -112,6 +112,8 @@ Build tiny synthetic wheels in tests and cover:
 - acceptance of byte-identical duplicates;
 - deterministic sorted dependency inventory and collected license/notice files;
 - rejection of non-Windows, non-x86_64, and incompatible Python wheel tags;
+- rejection of RECORD mismatches except an exact audited exception that pins
+  whole-wheel SHA-256 plus recorded and actual member hashes/sizes;
 - successful import closure check using `importlib.metadata` from the staged vendor directory.
 
 Run:
@@ -130,6 +132,10 @@ Pin the top-level runtime dependencies in `offline-requirements-win-x64-cp311.tx
 - `expand`: validate every wheel and safely copy supported paths into a fresh staging vendor directory.
 - `inventory`: record distribution, version, filename, SHA-256, license expression, and included license files in sorted JSON/text output.
 - `verify`: ensure all pinned top-level packages plus their recursive `Requires-Dist` closure are present, with environment markers evaluated for Windows/CPython 3.11.
+
+The published `kicad-python` 0.7.1 wheel has one stale METADATA hash/size in its
+RECORD. Track that single upstream defect in
+`offline-wheel-record-exceptions.json`; do not weaken validation globally.
 
 Use `packaging` only in the build environment, not at plugin runtime. Ignore `.offline-build/`, wheelhouses, expanded vendor trees, and generated reports.
 

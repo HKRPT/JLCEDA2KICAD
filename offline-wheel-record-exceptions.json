@@ -1,0 +1,12 @@
+[
+  {
+    "filename": "kicad_python-0.7.1-py3-none-any.whl",
+    "wheel_sha256": "e3e518301cc7b5d8c4a8f0715de8826ca7d78aebb42352fc55c23df081248724",
+    "member": "kicad_python-0.7.1.dist-info/METADATA",
+    "record_digest": "sha256=FKOC5HYclbqNZ-4K3R76rqPqEna8Sc7aEKQMrVLL3lY",
+    "record_size": "8947",
+    "actual_digest": "sha256=qiG5UxBW5_MHU0pNRbqTYVtst6qgTGaCMo6MJYN09kI",
+    "actual_size": "8737",
+    "reason": "KiCad's published 0.7.1 wheel has one stale METADATA RECORD entry; the whole-wheel SHA-256 and exact observed mismatch are pinned here"
+  }
+]
