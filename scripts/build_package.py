@@ -3,9 +3,9 @@
 import argparse
 import hashlib
 import zipfile
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Sequence
 
 from jlceda2kicad.version import __version__  # type: ignore[import-untyped]
 
@@ -95,7 +95,9 @@ def _source_files(
     for name in files:
         folded = name.casefold()
         if folded in casefolded and casefolded[folded] != name:
-            raise ValueError(f"case-insensitive package path collision: {casefolded[folded]}, {name}")
+            raise ValueError(
+                f"case-insensitive package path collision: {casefolded[folded]}, {name}"
+            )
         casefolded[folded] = name
     return files
 

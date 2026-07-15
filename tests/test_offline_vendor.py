@@ -73,7 +73,8 @@ def _rewrite_member(wheel: Path, member: str, data: bytes) -> None:
 def _record_exception(wheel: Path, member: str) -> dict[str, str]:
     with zipfile.ZipFile(wheel) as archive:
         record_name = next(name for name in archive.namelist() if name.endswith("/RECORD"))
-        rows = {row[0]: row[1:] for row in csv.reader(archive.read(record_name).decode().splitlines())}
+        record_lines = archive.read(record_name).decode().splitlines()
+        rows = {row[0]: row[1:] for row in csv.reader(record_lines)}
         data = archive.read(member)
     import base64
 

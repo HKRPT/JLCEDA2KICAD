@@ -16,7 +16,7 @@ def test_package_version_has_one_stable_archive_metadata_entry() -> None:
     versions = metadata["versions"]
 
     assert VERSION == __version__ == "0.1.0"
-    assert ARCHIVE_NAME == f"JLCEDA2KICAD-{__version__}.zip"
+    assert f"JLCEDA2KICAD-{__version__}.zip" == ARCHIVE_NAME
     assert len(versions) == 1
     assert versions[0]["version"] == __version__
     assert versions[0]["status"] == "stable"

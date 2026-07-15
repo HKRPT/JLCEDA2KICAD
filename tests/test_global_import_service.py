@@ -780,4 +780,4 @@ def test_project_import_report_preserves_destination_metadata(tmp_path: Path) ->
         project / "libs" / "lcsc_project.pretty" / "NewPart.kicad_mod"
     )
     assert report.model_directory == project / "libs" / "lcsc_project.3dshapes"
-    assert report.footprint_association is None
+    assert report.footprint_association == "LCSC_Project:NewPart"

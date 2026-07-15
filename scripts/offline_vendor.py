@@ -8,16 +8,15 @@ import csv
 import hashlib
 import importlib.metadata
 import json
-import os
 import stat
 import subprocess
 import sys
 import zipfile
 from collections import deque
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
 from email.parser import BytesParser
 from pathlib import Path, PurePosixPath
-from typing import Iterable, Sequence
 
 from packaging.markers import default_environment
 from packaging.requirements import Requirement
@@ -125,7 +124,10 @@ def _inspect_wheel(
         metadata_version = message.get("Version")
         if not metadata_name or not metadata_version:
             raise VendorError(f"wheel METADATA is missing Name or Version: {path.name}")
-        if canonicalize_name(metadata_name) != filename_name or str(filename_version) != metadata_version:
+        if (
+            canonicalize_name(metadata_name) != filename_name
+            or str(filename_version) != metadata_version
+        ):
             raise VendorError(f"wheel filename and METADATA disagree: {path.name}")
 
         integrity_exceptions = _validate_record(
@@ -311,7 +313,9 @@ def expand_wheels(
                         licenses / inspected.record.name / relative.name
                     ).resolve()
                     if not license_destination.is_relative_to(license_root):
-                        raise VendorError(f"license member escapes license directory: {info.filename}")
+                        raise VendorError(
+                            f"license member escapes license directory: {info.filename}"
+                        )
                     _write_exact(
                         license_destination,
                         data,

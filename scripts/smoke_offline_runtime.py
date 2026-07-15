@@ -184,17 +184,21 @@ def run_smoke(archive_path: Path, python: Path) -> dict[str, object]:
             line for line in completed.stdout.splitlines() if line.startswith(_MARKER)
         ]
         if len(marker_lines) != 1:
-            raise OfflineSmokeError(f"isolated probe returned no unique result:\n{completed.stdout}")
+            raise OfflineSmokeError(
+                f"isolated probe returned no unique result:\n{completed.stdout}"
+            )
         raw_payload = json.loads(marker_lines[0][len(_MARKER) :])
         if not isinstance(raw_payload, dict):
             raise OfflineSmokeError("isolated probe result is not an object")
         payload = cast(dict[str, object], raw_payload)
         validate_origins(payload, vendor)
         raw_app_origin = payload.get("app_origin")
-        if not isinstance(raw_app_origin, str) or not Path(raw_app_origin).resolve().is_relative_to(
-            plugin_root.resolve()
-        ):
-            raise OfflineSmokeError(f"application resolved outside extracted plugin: {raw_app_origin}")
+        if not isinstance(raw_app_origin, str) or not Path(
+            raw_app_origin
+        ).resolve().is_relative_to(plugin_root.resolve()):
+            raise OfflineSmokeError(
+                f"application resolved outside extracted plugin: {raw_app_origin}"
+            )
         return payload
 
 
