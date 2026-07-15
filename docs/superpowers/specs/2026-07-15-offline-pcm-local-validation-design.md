@@ -23,6 +23,8 @@ third-party license evidence is complete.
   cannot change this KiCad security preference.
 - KiCad may spend a few seconds creating its isolated Python environment, but
   dependency setup must not access PyPI or another package index.
+- Installation must also work in a typical mainland China environment without
+  access to PyPI, GitHub, or an overseas package mirror.
 - The action then appears as **JLCEDA2KICAD Importer** under **Tools > External
   Plugins** and opens normally.
 - Installing Python dependencies is offline. Querying a new LCSC component is
@@ -82,8 +84,10 @@ the current application requirements:
 
 The local builder downloads or reuses these wheels only during construction,
 records their filenames and SHA-256 values, and verifies the hashes before
-extraction. The resulting installed plugin must not need those source wheels or
-network access.
+extraction. It respects the builder's existing pip configuration, including a
+mainland China mirror, and also accepts an explicit index URL, local wheelhouse,
+or no-index cache mode without embedding any mirror into the plugin. The
+resulting installed plugin must not need those source wheels or network access.
 
 For the local proof, generated wheels, the expanded vendor tree, smoke
 directories, and ZIP artifacts remain ignored and uncommitted. A later public
@@ -115,7 +119,8 @@ performed.
 3. Validate the ZIP structure, member safety, hashes, dependency inventory, and
    `kipy.packaging` result.
 4. Prove with a fresh Python 3.11 environment and package-index access disabled
-   that all runtime imports resolve from the staged `vendor` directory.
+   (including an unreachable index/proxy configuration) that all runtime imports
+   resolve from the staged `vendor` directory.
 5. Prove a child `sys.executable -m easyeda2kicad --help` invocation inherits
    the vendor path and succeeds.
 6. Close KiCad and clean the authorized old plugin/environment locations.
@@ -124,7 +129,9 @@ performed.
    copy, action availability, import origins, main window launch, and project
    detection.
 9. Run C2040 query/preview and a disposable-project import. Network use here is
-   limited to LCSC/EasyEDA component retrieval, not Python package setup.
+   limited to LCSC/EasyEDA component retrieval, not Python package setup. Verify
+   inherited mainland-network proxy variables are preserved and credentials are
+   redacted from logs.
 10. Uninstall through PCM and confirm the PCM plugin files and action disappear
     while project and application data remain.
 11. Reinstall the same ZIP and repeat action launch.
@@ -153,6 +160,8 @@ The local feasibility phase succeeds only when:
 - all automated tests and static checks pass;
 - one deterministic offline PCM ZIP validates successfully;
 - clean KiCad 10 PCM installation exposes and launches the plugin without PyPI;
+- that installation does not require GitHub or an overseas mirror and remains
+  successful with package-index access deliberately made unreachable;
 - PySide6, kicad-python, and easyeda2kicad load from the installed `vendor`;
 - the easyeda2kicad child process, preview, and disposable-project import work;
 - PCM uninstall removes the plugin action and managed files;
