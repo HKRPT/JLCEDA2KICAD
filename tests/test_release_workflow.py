@@ -9,18 +9,29 @@ def test_release_workflow_is_tag_only_and_uses_distribution_clis() -> None:
     assert '- "v*"' in workflow
     assert "scripts/check_release.py" in workflow
     assert "scripts/publish_release.py" in workflow
-    assert "scripts/build_repository_site.py github" in workflow
     assert "branches:" not in workflow.split("jobs:", 1)[0]
     assert "-rc" not in workflow
 
 
-def test_release_workflow_scopes_write_permissions_to_publish_jobs() -> None:
-    workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+def test_pages_workflow_runs_only_after_a_release_is_published() -> None:
+    workflow = (ROOT / ".github/workflows/pages.yml").read_text(encoding="utf-8")
 
-    assert workflow.count("contents: write") == 1
-    assert workflow.count("pages: write") == 1
-    assert workflow.count("id-token: write") == 1
-    assert "environment:\n      name: github-pages" in workflow
+    assert "release:" in workflow.split("jobs:", 1)[0]
+    assert "types: [published]" in workflow
+    assert "push:" not in workflow.split("jobs:", 1)[0]
+    assert "scripts/build_repository_site.py github" in workflow
+
+
+def test_publication_workflows_scope_write_permissions() -> None:
+    release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    pages = (ROOT / ".github/workflows/pages.yml").read_text(encoding="utf-8")
+
+    assert release.count("contents: write") == 1
+    assert "pages: write" not in release
+    assert pages.count("pages: write") == 1
+    assert pages.count("id-token: write") == 1
+    assert "contents: write" not in pages
+    assert "environment:\n      name: github-pages" in pages
 
 
 def test_release_package_stages_and_verifies_offline_runtime() -> None:

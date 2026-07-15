@@ -7,6 +7,7 @@ from io import StringIO
 from pathlib import Path
 
 import pytest
+from packaging.tags import Tag
 
 from scripts.offline_vendor import (
     VendorError,
@@ -169,7 +170,13 @@ def test_expand_wheels_allows_byte_identical_duplicate_output(tmp_path: Path) ->
     assert [record.name for record in records] == ["first", "second"]
 
 
-def test_expand_wheels_rejects_incompatible_platform_tag(tmp_path: Path) -> None:
+def test_expand_wheels_rejects_incompatible_platform_tag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "scripts.offline_vendor.sys_tags",
+        lambda: iter((Tag("cp311", "cp311", "win_amd64"),)),
+    )
     wheelhouse = tmp_path / "wheels"
     wheelhouse.mkdir()
     _wheel(wheelhouse, "demo", "1.0", tag="cp311-cp311-manylinux_2_17_x86_64")
