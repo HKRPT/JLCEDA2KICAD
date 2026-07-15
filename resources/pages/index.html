@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>JLCEDA2KICAD Importer — KiCad PCM repository</title>
+  <style>
+    :root {
+      font-family: system-ui, sans-serif;
+      color: #17212b;
+      background: #eef4f6;
+    }
+    body { margin: 0; }
+    main {
+      box-sizing: border-box;
+      max-width: 760px;
+      min-height: 100vh;
+      margin: auto;
+      padding: 3rem 1.25rem;
+      background: #fff;
+    }
+    h1 { color: #087d78; line-height: 1.15; }
+    h2 { margin-top: 2rem; }
+    code {
+      display: block;
+      overflow-wrap: anywhere;
+      padding: .9rem;
+      border: 1px solid #9ab7ba;
+      border-radius: .4rem;
+      background: #f2f8f8;
+      user-select: all;
+    }
+    li { margin: .65rem 0; }
+    .note {
+      padding: .9rem 1rem;
+      border-left: .3rem solid #087d78;
+      background: #edf8f7;
+    }
+    a { color: #006b67; }
+    @media (prefers-color-scheme: dark) {
+      :root { color: #e6eef0; background: #11191d; }
+      main { background: #182328; }
+      h1, a { color: #62d8d0; }
+      code { border-color: #476b6d; background: #102124; }
+      .note { background: #102827; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>JLCEDA2KICAD Importer</h1>
+  <p>
+    Install and update the Windows IPC plugin from a custom KiCad repository.<br>
+    通过自定义 KiCad 仓库安装和更新 Windows IPC 插件。
+  </p>
+
+  <h2>KiCad 10 / 推荐</h2>
+  <code>https://hkrpt.github.io/JLCEDA2KICAD/v2/repository.json</code>
+
+  <h2>KiCad 9</h2>
+  <code>https://hkrpt.github.io/JLCEDA2KICAD/v1/repository.json</code>
+
+  <h2>Install / 安装</h2>
+  <ol>
+    <li>Open Plugin and Content Manager / 打开“扩展内容管理器”。</li>
+    <li>
+      Open Manage, add the matching URL, save, and refresh / 点击“管理”，添加对应
+      地址，保存并刷新。
+    </li>
+    <li>
+      Search for <strong>JLCEDA2KICAD Importer</strong> and install / 搜索并安装插件。
+    </li>
+    <li>
+      Open a board and click the teal JLC toolbar button; some builds also show
+      Tools → External Plugins / 打开 PCB 后点击顶部青绿色 JLC 图标；部分版本也会
+      显示“工具 → 外部插件”。
+    </li>
+  </ol>
+
+  <p class="note">
+    Offline installation: download the PCM ZIP from
+    <a href="https://github.com/HKRPT/JLCEDA2KICAD/releases">GitHub Releases</a>
+    and choose Install from File without extracting it. The published ZIP includes
+    <code>plugins/vendor</code> and does not download Python packages on first launch.<br>
+    离线安装：下载发行页中的 PCM ZIP，不解压，使用“从文件安装”。正式包已经内置
+    Python 运行依赖，首次启动不会下载 Python 包。
+  </p>
+
+  <p>
+    <a href="https://github.com/HKRPT/JLCEDA2KICAD">Source / 源码</a> ·
+    <a href="https://github.com/HKRPT/JLCEDA2KICAD/issues">Issues / 问题反馈</a> · MIT
+  </p>
+</main>
+</body>
+</html>

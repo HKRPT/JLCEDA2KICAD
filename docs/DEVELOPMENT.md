@@ -86,3 +86,30 @@ expanded under `plugins/vendor`.
 
 The ZIP is deterministic and is accompanied by a SHA-256 sidecar and sorted
 file manifest. Do not commit `dist`.
+
+## Release candidate and local PCM repository
+
+Before tagging a release, build the bundled runtime and run the complete source
+and package gates. The source, tag, metadata, and three immutable assets can be
+checked without contacting GitHub:
+
+```powershell
+./.venv/Scripts/python.exe -m mypy src scripts
+./.venv/Scripts/python.exe scripts/check_release.py --tag v0.1.0
+./.venv/Scripts/python.exe scripts/build_repository_site.py local `
+  --tag v0.1.0 `
+  --archive dist/JLCEDA2KICAD-0.1.0.zip `
+  --checksum dist/JLCEDA2KICAD-0.1.0.zip.sha256 `
+  --manifest dist/JLCEDA2KICAD-0.1.0.zip.manifest.txt `
+  --download-url http://127.0.0.1:8765/JLCEDA2KICAD-0.1.0.zip `
+  --base-url http://127.0.0.1:8765 `
+  --published-at 2026-07-15T08:00:00Z `
+  --output .smoke/pcm-site
+```
+
+Serve `.smoke/pcm-site` on `127.0.0.1:8765` and add the generated v1 and v2
+repository URLs to isolated KiCad 9 and 10 configurations. Record package hashes
+and screenshots; do not treat an unchecked GUI step as passed. The tag-only
+GitHub workflow validates that `vVERSION`, package metadata, and `main` agree,
+creates an immutable Release with the ZIP/checksum/manifest trio, then rebuilds
+and deploys the dual-schema Pages repository.

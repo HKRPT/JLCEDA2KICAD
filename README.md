@@ -40,6 +40,48 @@ server, database, or team features.
 
 The plugin metadata uses `runtime: ipc`; no legacy `pcbnew` SWIG API is used.
 
+## Install from the GitHub PCM repository
+
+KiCad 10 users should add this v2 repository URL:
+
+```text
+https://hkrpt.github.io/JLCEDA2KICAD/v2/repository.json
+```
+
+KiCad 9 users should add this v1 repository URL:
+
+```text
+https://hkrpt.github.io/JLCEDA2KICAD/v1/repository.json
+```
+
+1. In KiCad Project Manager, open **Plugin and Content Manager** and choose
+   **Manage**.
+2. Add the URL matching your KiCad major version, save, refresh the repository,
+   search for **JLCEDA2KICAD Importer**, and install it.
+3. Open a board in PCB Editor. Launch the importer from the teal JLC button in
+   the top toolbar. Depending on the KiCad build, it can also appear under
+   **Tools → External Plugins → JLCEDA2KICAD Importer**.
+
+The repository indexes and release assets are hosted on GitHub, so repository
+installation and updates require access to GitHub Pages and GitHub Releases.
+For an offline or restricted network, download the exact PCM asset from
+[GitHub Releases](https://github.com/HKRPT/JLCEDA2KICAD/releases), transfer it
+to the target computer, and use **Install from File** without extracting it.
+Do not use GitHub's automatically generated “Source code” archives.
+
+On first discovery, KiCad creates its managed isolated Python environment. The
+published PCM asset already contains the pinned Windows x64/Python 3.11 runtime
+under `plugins/vendor`, so environment setup and plugin launch do not contact
+PyPI, GitHub, or another package mirror. Only an uncached EasyEDA/LCSC component
+query needs network access; the converter inherits the system proxy environment.
+
+Use Plugin and Content Manager to update or uninstall the PCM copy. After either
+operation, close every KiCad window, including Project Manager, and reopen the
+project. If the action is missing, use **Tools → External Plugins → Refresh
+Plugins** and check the top toolbar again. Also remove an older development copy
+with the same `io.hkrpt.jlc` identifier; PCM uninstall intentionally leaves
+application settings, cache, logs, and history in place.
+
 ## Local offline installation (recommended)
 
 1. Download `JLCEDA2KICAD-0.1.0.zip` and do not extract it.

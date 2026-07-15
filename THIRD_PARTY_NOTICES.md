@@ -18,6 +18,8 @@ runtime payload is not committed to this source repository.
 - Copyright: The KiCad Developers
 - License shipped in the wheel: MIT
 - Use: official client binding for the KiCad IPC API.
+- Release tooling validates generated repository metadata with the PCM schemas
+  bundled in `kicad-python==0.7.1`, under that package's licensing terms.
 
 ## PySide6 6.11.1
 

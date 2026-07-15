@@ -3,6 +3,21 @@
 Use disposable projects only. Run the full list separately in KiCad 9.0.6 and
 10.0.4 on Windows.
 
+Use isolated `KICAD_CONFIG_HOME` and `KICAD_DOCUMENTS_HOME` directories for each
+major version. Record the exact repository URL, asset SHA-256, KiCad build,
+Python version, command output, and screenshots with the release evidence.
+
+- [ ] Serve the local release-candidate site over `http://127.0.0.1`; add its v1
+  URL in KiCad 9 and v2 URL in KiCad 10, refresh, and verify the displayed version,
+  download size, install size, platform, status, icon, and checksum.
+- [ ] Install from each repository into its isolated profile and confirm the
+  downloaded ZIP hash equals the release-candidate SHA-256 sidecar.
+- [ ] Separately install the same ZIP with “从文件安装” / “Install from File”.
+- [ ] Replace the local repository fixture with a higher test version, refresh,
+  and verify KiCad offers an update without changing the installed copy first.
+- [ ] Launch from the teal top-toolbar icon and, when present, from
+  “工具 → 外部插件”; record which entry KiCad 9 and KiCad 10 expose.
+
 - [ ] Install the offline PCM ZIP with “从文件安装”; confirm only this plugin's
   PCM directories and dedicated environment change.
 - [ ] Make PyPI/GitHub/overseas mirrors unreachable, refresh plugins, and confirm
@@ -25,6 +40,8 @@ Use disposable projects only. Run the full list separately in KiCad 9.0.6 and
 - [ ] Confirm proxy credentials and `KICAD_API_TOKEN` do not appear in logs.
 - [ ] Confirm settings/history survive restart and malformed JSON is preserved/reset.
 - [ ] Uninstall through PCM; confirm other plugins and application data remain untouched.
+- [ ] After repository and file installations, uninstall through PCM and confirm
+  the isolated plugin directory/environment is removed while settings remain.
 - [ ] Optionally run uninstall with `-PurgeAppData` and confirm only this app's data is removed.
 
 ## Global personal library smoke test

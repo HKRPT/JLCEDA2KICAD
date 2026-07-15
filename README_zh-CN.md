@@ -34,6 +34,42 @@ KiCad 全局个人库。
 
 插件使用 `runtime: ipc`，不使用旧版 `pcbnew` SWIG API。
 
+## 通过 GitHub PCM 仓库安装
+
+KiCad 10 用户请添加 v2 仓库地址：
+
+```text
+https://hkrpt.github.io/JLCEDA2KICAD/v2/repository.json
+```
+
+KiCad 9 用户请添加 v1 仓库地址：
+
+```text
+https://hkrpt.github.io/JLCEDA2KICAD/v1/repository.json
+```
+
+1. 在 KiCad 工程管理器中打开“扩展内容管理器”，点击“管理”。
+2. 添加与 KiCad 主版本对应的地址，保存并刷新仓库；搜索
+   **JLCEDA2KICAD Importer** 后安装。
+3. 打开一个 PCB，在 PCB 编辑器顶部工具栏点击青绿色 JLC 图标。某些 KiCad
+   版本也会把入口显示在“**工具 → 外部插件 → JLCEDA2KICAD Importer**”。
+
+仓库索引和发行文件托管在 GitHub，因此通过仓库安装或更新时需要能够访问
+GitHub Pages 和 GitHub Releases。离线或网络受限环境可从
+[GitHub Releases](https://github.com/HKRPT/JLCEDA2KICAD/releases) 下载准确的
+PCM ZIP，把它转交到目标电脑，再点击“**从文件安装**”；不要解压，也不要使用
+GitHub 自动生成的“Source code”压缩包。
+
+KiCad 首次发现插件时会创建由它管理的隔离 Python 环境。正式 PCM ZIP 已在
+`plugins/vendor` 内置固定版本的 Windows x64/Python 3.11 运行依赖，因此环境
+建立和插件启动不会访问 PyPI、GitHub 或任何软件源。只有查询未缓存的
+EasyEDA/LCSC 元件数据需要网络；转换器会继承系统代理环境。
+
+更新或卸载请继续使用“扩展内容管理器”。操作后完整退出所有 KiCad 窗口（包括
+工程管理器）再重新打开工程。若入口没有出现，请执行“工具 → 外部插件 → 刷新插件”
+并再次检查顶部工具栏；同时删除标识符同为 `io.hkrpt.jlc` 的旧开发安装副本。
+PCM 卸载会保留应用设置、缓存、日志和历史，这是预期行为。
+
 ## 本地离线安装（推荐）
 
 1. 下载 `JLCEDA2KICAD-0.1.0.zip`，不要解压。
