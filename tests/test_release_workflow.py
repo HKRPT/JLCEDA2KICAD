@@ -13,11 +13,12 @@ def test_release_workflow_is_tag_only_and_uses_distribution_clis() -> None:
     assert "-rc" not in workflow
 
 
-def test_pages_workflow_runs_only_after_a_release_is_published() -> None:
+def test_pages_workflow_supports_published_release_and_manual_recovery() -> None:
     workflow = (ROOT / ".github/workflows/pages.yml").read_text(encoding="utf-8")
 
     assert "release:" in workflow.split("jobs:", 1)[0]
     assert "types: [published]" in workflow
+    assert "workflow_dispatch:" in workflow.split("jobs:", 1)[0]
     assert "push:" not in workflow.split("jobs:", 1)[0]
     assert "scripts/build_repository_site.py github" in workflow
 
