@@ -1,12 +1,17 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [string[]]$KiCadVersions = @("9.0", "10.0")
+    [string[]]$KiCadVersions = @("9.0", "10.0"),
+    [string]$VendorDir = ""
 )
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $identifier = "io.hkrpt.jlc"
 $documentsRoot = [Environment]::GetFolderPath("MyDocuments")
+if ([string]::IsNullOrWhiteSpace($VendorDir)) {
+    $VendorDir = Join-Path $repoRoot ".offline-build\vendor"
+}
+$vendorSource = [IO.Path]::GetFullPath($VendorDir)
 
 foreach ($version in $KiCadVersions) {
     if ($version -notmatch '^\d+\.\d+$') {
@@ -20,19 +25,33 @@ foreach ($version in $KiCadVersions) {
     if (-not $PSCmdlet.ShouldProcess($destination, "Install JLCEDA2KICAD development plugin")) {
         continue
     }
+    if (-not (Test-Path -LiteralPath $vendorSource -PathType Container)) {
+        throw "Bundled runtime is missing: $vendorSource. Run scripts/offline_vendor.py first."
+    }
     New-Item -ItemType Directory -Path $destination -Force | Out-Null
-    foreach ($file in @("plugin.json", "plugin_entry.py", "requirements.txt", "LICENSE", "README.md")) {
+    foreach ($file in @(
+        "plugin.json",
+        "plugin_entry.py",
+        "plugin_bootstrap.py",
+        "requirements.txt",
+        "LICENSE",
+        "README.md"
+    )) {
         Copy-Item -LiteralPath (Join-Path $repoRoot $file) -Destination $destination -Force
     }
     $resourcesDestination = Join-Path $destination "resources"
     $packageDestination = Join-Path $destination "jlceda2kicad"
-    New-Item -ItemType Directory -Path $resourcesDestination, $packageDestination -Force |
-        Out-Null
+    $vendorDestination = Join-Path $destination "vendor"
+    New-Item -ItemType Directory `
+        -Path $resourcesDestination, $packageDestination, $vendorDestination `
+        -Force | Out-Null
     Copy-Item -Path (Join-Path $repoRoot "resources\*") `
         -Destination $resourcesDestination -Recurse -Force
     Copy-Item -Path (Join-Path $repoRoot "src\jlceda2kicad\*.py") `
         -Destination $packageDestination -Force
+    Copy-Item -Path (Join-Path $vendorSource "*") `
+        -Destination $vendorDestination -Recurse -Force
     Write-Host "Installed: $destination"
 }
 
-Write-Host "Restart PCB Editor and refresh plugins. KiCad will create the dedicated Python environment and install requirements.txt."
+Write-Host "Runtime dependencies are bundled. Restart PCB Editor and refresh plugins."

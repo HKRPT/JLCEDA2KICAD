@@ -76,3 +76,12 @@ def test_development_installer_merges_existing_plugin_directories() -> None:
 
     assert '"resources\\*"' in script
     assert '"src\\jlceda2kicad\\*.py"' in script
+
+
+def test_development_installer_copies_bundled_runtime_bootstrap() -> None:
+    script = (ROOT / "scripts" / "install_dev.ps1").read_text(encoding="utf-8")
+
+    assert '"plugin_bootstrap.py"' in script
+    assert '(Join-Path $vendorSource "*")' in script
+    assert "$vendorDestination" in script
+    assert "Runtime dependencies are bundled" in script
