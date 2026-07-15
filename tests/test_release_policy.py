@@ -203,3 +203,18 @@ def test_check_release_rejects_tag_not_on_main(monkeypatch: pytest.MonkeyPatch) 
     )
 
     assert check_release_main(["--tag", "v0.1.0"]) == 2
+
+
+def test_check_release_local_preflight_uses_local_main(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[object] = []
+
+    def fake_run(command: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert check_release_main(["--tag", "v0.1.0"]) == 0
+    assert calls == [["git", "merge-base", "--is-ancestor", "v0.1.0", "main"]]

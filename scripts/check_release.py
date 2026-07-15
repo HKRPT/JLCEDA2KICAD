@@ -37,8 +37,9 @@ def _run(argv: Sequence[str] | None = None) -> int:
         raise DistributionError("A release tag is required")
     tag = parse_release_tag(args.tag)
     metadata = json.loads((ROOT / "metadata.json").read_text(encoding="utf-8"))
+    main_ref = "origin/main" if args.github_output else "main"
     ancestry = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", tag.tag_name, "origin/main"],
+        ["git", "merge-base", "--is-ancestor", tag.tag_name, main_ref],
         cwd=ROOT,
         check=False,
         stdin=subprocess.DEVNULL,
