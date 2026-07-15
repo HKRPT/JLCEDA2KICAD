@@ -62,3 +62,7 @@ python_version = "3.11"
 strict = true
 packages = ["jlceda2kicad"]
 exclude = ["build", "dist"]
+
+[[tool.mypy.overrides]]
+module = "jsonschema.*"
+ignore_missing_imports = true
