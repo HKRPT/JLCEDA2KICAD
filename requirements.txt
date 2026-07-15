@@ -1,4 +1,3 @@
-easyeda2kicad==1.0.1
-kicad-python==0.7.1
-PySide6==6.11.1
-
+# Runtime dependencies are bundled under plugins/vendor in the offline PCM ZIP.
+# This file intentionally has no installable requirements so KiCad's mandatory
+# environment setup succeeds without contacting a Python package index.
