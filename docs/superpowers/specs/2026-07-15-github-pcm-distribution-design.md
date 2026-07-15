@@ -103,7 +103,8 @@ version adds:
 - the lowercase SHA-256 of the actual ZIP bytes;
 - compressed download size in bytes;
 - uncompressed install size in bytes; and
-- a release status derived from its tag.
+- the validated `stable` or `testing` status from that version's archive
+  metadata.
 
 The v1 package list conforms to the KiCad v1 Packages schema. The v2 list is a
 v2 representation of the same v1-compatible plugin and conforms to the KiCad
@@ -119,17 +120,19 @@ URLs.
 
 ## Version and release policy
 
-Only tags matching the supported SemVer release forms trigger publication:
+Only tags matching KiCad's numeric package-version form trigger publication:
 
 ```text
 vMAJOR.MINOR.PATCH
-vMAJOR.MINOR.PATCH-rc.NUMBER
 ```
 
 The tag without the leading `v` must match the single project version source
-and the sole version in the archive metadata. A final tag is `stable`; an RC
-tag is `testing`. The source metadata must have the corresponding status before
-the tag is accepted. The tagged commit must be reachable from `main`.
+and the sole version in the archive metadata. The source metadata status must
+be either `stable` or `testing`; a `testing` package is published as a GitHub
+prerelease. KiCad's v1 and v2 schemas do not allow prerelease suffixes in the
+package version string, so a testing publication still uses a unique numeric
+version and a later stable publication must use a newer numeric version. The
+tagged commit must be reachable from `main`.
 
 The initial public version is `v0.1.0`. Future releases use the same asset name
 pattern, with the package version substituted. Draft releases and releases
@@ -257,7 +260,8 @@ Ordinary tests remain offline. New unit and integration coverage includes:
 - repository-only download fields and archive metadata without them;
 - exact SHA-256, download size, and install size calculation;
 - deterministic JSON and resource ZIP output;
-- stable and RC tag parsing, status mapping, and version mismatch rejection;
+- numeric tag parsing, stable/testing status mapping, and version mismatch
+  rejection;
 - semantic version ordering across multiple releases;
 - draft, malformed, missing, duplicate, and mismatched release assets;
 - same-version same-hash reuse and different-hash rejection;
