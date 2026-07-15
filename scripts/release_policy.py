@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import PurePosixPath
 from typing import Literal, cast
+from urllib.parse import urlparse
 
 Status = Literal["stable", "testing"]
 _TAG = re.compile(r"^v(\d{1,4})\.(\d{1,4})\.(\d{1,6})$")
@@ -151,8 +152,20 @@ def inspect_release(payload: ReleasePayload) -> PublishedVersion:
     expected_checksum = f"{digest}  {expected_archive}\n".encode("ascii")
     if payload.checksum != expected_checksum:
         raise DistributionError("release checksum sidecar does not match the archive")
-    if not payload.archive_url.startswith("https://") or not payload.archive_url.endswith(
-        f"/{expected_archive}"
+    parsed_url = urlparse(payload.archive_url)
+    secure_remote = parsed_url.scheme == "https" and bool(parsed_url.netloc)
+    local_smoke = (
+        parsed_url.scheme == "http"
+        and parsed_url.hostname == "127.0.0.1"
+        and bool(parsed_url.netloc)
+    )
+    if (
+        not (secure_remote or local_smoke)
+        or parsed_url.username
+        or parsed_url.password
+        or parsed_url.query
+        or parsed_url.fragment
+        or not parsed_url.path.endswith(f"/{expected_archive}")
     ):
         raise DistributionError("release archive URL is invalid")
     try:
