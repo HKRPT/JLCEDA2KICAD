@@ -46,6 +46,7 @@ def test_build_package_has_pcm_root_and_direct_ipc_plugin_layout(tmp_path: Path)
     assert "resources/icon_128.png" in names
     assert "plugins/plugin.json" in names
     assert "plugins/plugin_entry.py" in names
+    assert "plugins/plugin_bootstrap.py" in names
     assert "plugins/requirements.txt" in names
     assert "plugins/jlceda2kicad/main.py" in names
     assert "plugins/resources/icon_24.png" in names

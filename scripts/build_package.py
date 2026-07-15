@@ -28,6 +28,7 @@ def _source_files() -> dict[str, Path]:
         "resources/icon_128.png": ROOT / "resources" / "icon_128.png",
         "plugins/plugin.json": ROOT / "plugin.json",
         "plugins/plugin_entry.py": ROOT / "plugin_entry.py",
+        "plugins/plugin_bootstrap.py": ROOT / "plugin_bootstrap.py",
         "plugins/requirements.txt": ROOT / "requirements.txt",
         "plugins/LICENSE": ROOT / "LICENSE",
     }
